@@ -3,6 +3,42 @@ import { FantasyStatblocksAdapter } from "./fantasy-statblocks-adapter";
 import type { MonsterManagerState, MonsterRecord, MonsterSearchHit } from "./types";
 
 const SEARCH_RESULT_LIMIT = 7;
+const XP_BY_CHALLENGE: Record<string, number> = {
+	"0": 10,
+	"1/8": 25,
+	"1/4": 50,
+	"1/2": 100,
+	"1": 200,
+	"2": 450,
+	"3": 700,
+	"4": 1100,
+	"5": 1800,
+	"6": 2300,
+	"7": 2900,
+	"8": 3900,
+	"9": 5000,
+	"10": 5900,
+	"11": 7200,
+	"12": 8400,
+	"13": 10000,
+	"14": 11500,
+	"15": 13000,
+	"16": 15000,
+	"17": 18000,
+	"18": 20000,
+	"19": 22000,
+	"20": 25000,
+	"21": 33000,
+	"22": 41000,
+	"23": 50000,
+	"24": 62000,
+	"25": 75000,
+	"26": 90000,
+	"27": 105000,
+	"28": 120000,
+	"29": 135000,
+	"30": 155000,
+};
 
 export class MonsterManager {
 	private readonly adapter: FantasyStatblocksAdapter;
@@ -93,6 +129,22 @@ export class MonsterManager {
 		await this.adapter.openCreaturePreview(monster);
 	}
 
+	async openCreatureHoverPreview(monster: MonsterRecord): Promise<void> {
+		await this.adapter.openCreatureHoverPreview(monster);
+	}
+
+	async showCreatureHoverPreview(monster: MonsterRecord, anchorEl: HTMLElement): Promise<void> {
+		await this.adapter.showCreatureHoverPreview(monster, anchorEl);
+	}
+
+	hideCreatureHoverPreview(): void {
+		this.adapter.hideCreatureHoverPreview();
+	}
+
+	scheduleHideCreatureHoverPreview(delayMs = 500): void {
+		this.adapter.scheduleHideCreatureHoverPreview(delayMs);
+	}
+
 	private loadCacheIfNeeded(): void {
 		if (this.cacheLoaded) {
 			return;
@@ -139,6 +191,7 @@ export class MonsterManager {
 			id,
 			name,
 			challenge: this.readChallenge(record.cr),
+			xp: this.readXp(record),
 			hp: this.readNumber(record.hp),
 			ac: this.readNumber(record.ac),
 			dex: this.readDex(record),
@@ -184,12 +237,83 @@ export class MonsterManager {
 	}
 
 	private readChallenge(value: unknown): string | null {
+		if (value && typeof value === "object") {
+			const record = value as Record<string, unknown>;
+			const nestedChallenge = this.readChallenge(record.cr);
+			if (nestedChallenge) {
+				return nestedChallenge;
+			}
+		}
+
 		if (typeof value === "number" && Number.isFinite(value)) {
 			return String(value);
 		}
 		if (typeof value === "string" && value.trim().length) {
-			return value.trim();
+			const trimmed = value.trim();
+			return this.extractCrFromText(trimmed) ?? trimmed;
 		}
+		return null;
+	}
+
+	private readXp(record: Record<string, unknown>): number | null {
+		const direct = this.readNumber(record.xp);
+		if (direct !== null) {
+			return direct;
+		}
+
+		const directExp = this.readNumber(record.exp) ?? this.readNumber(record.experience);
+		if (directExp !== null) {
+			return directExp;
+		}
+
+		const challenge = record.cr;
+		if (challenge && typeof challenge === "object") {
+			const nested = challenge as Record<string, unknown>;
+			const nestedXp =
+				this.readNumber(nested.xp) ?? this.readNumber(nested.exp) ?? this.readNumber(nested.experience);
+			if (nestedXp !== null) {
+				return nestedXp;
+			}
+		}
+
+		const crText = this.readString(record.cr);
+		if (crText) {
+			const xpFromCrText = this.readXpFromCrText(crText);
+			if (xpFromCrText !== null) {
+				return xpFromCrText;
+			}
+		}
+
+		const challengeText = this.readChallenge(record.cr);
+		if (!challengeText) {
+			return null;
+		}
+
+		return XP_BY_CHALLENGE[challengeText] ?? null;
+	}
+
+	private readXpFromCrText(crText: string): number | null {
+		const match = crText.match(/(\d[\d,.]*)\s*xp/i);
+		if (!match?.[1]) {
+			return null;
+		}
+
+		const normalized = match[1].replace(/[,.]/g, "");
+		const parsed = Number.parseInt(normalized, 10);
+		return Number.isFinite(parsed) ? parsed : null;
+	}
+
+	private extractCrFromText(value: string): string | null {
+		const prefixed = value.match(/cr\s*([0-9]+(?:\/[0-9]+)?)/i);
+		if (prefixed?.[1]) {
+			return prefixed[1];
+		}
+
+		const plain = value.match(/^([0-9]+(?:\/[0-9]+)?)(?:\s|\(|$)/);
+		if (plain?.[1]) {
+			return plain[1];
+		}
+
 		return null;
 	}
 

@@ -11,6 +11,7 @@ import {
 } from "./encounter/combat-session";
 import { EncounterBlockWidgetComponent } from "./encounter/encounter-block-widget-component";
 import { createEncounterEditorKeymap } from "./encounter/encounter-editor-keymap";
+import type { EncounterPartySettings } from "./encounter/encounter-difficulty";
 import { parseEncounterBlock, summarizeEncounterSource } from "./encounter/encounter-parser";
 import { resolveEncounterEntries, type ResolveEncounterResult } from "./encounter/encounter-resolver";
 import { EncounterSuggest } from "./encounter/encounter-suggest";
@@ -19,10 +20,18 @@ import { FantasyStatblocksAdapter } from "./monsters/fantasy-statblocks-adapter"
 import { MonsterManager } from "./monsters/monster-manager";
 import { EncounterServer } from "./network/encounter-server";
 import type { EncounterPreviewRow } from "./ui/encounter/encounter-block-widget";
+import { PartySettingsModal } from "./ui/encounter/party-settings-modal";
 import { DmDashboardView, DM_DASHBOARD_VIEW_TYPE } from "./ui/dashboard/dm-dashboard-view";
 import type { DashboardViewModel } from "./ui/dashboard/types";
 import { PreactMount } from "./ui/preact-mount";
 import { CleanupRegistry } from "./utils/cleanup-registry";
+
+interface EncounterCastSettings extends EncounterPartySettings {}
+
+const DEFAULT_SETTINGS: EncounterCastSettings = {
+	partyMembers: null,
+	partyLevel: null,
+};
 
 export default class EncounterCastPlugin extends Plugin {
 	private readonly cleanupRegistry = new CleanupRegistry();
@@ -32,8 +41,11 @@ export default class EncounterCastPlugin extends Plugin {
 	private statusBarRoot: HTMLElement | null = null;
 	private currentSession: CombatSession | null = null;
 	private sourceWriteQueue = Promise.resolve();
+	private settings: EncounterCastSettings = { ...DEFAULT_SETTINGS };
+	private readonly encounterWidgetComponents = new Set<EncounterBlockWidgetComponent>();
 
 	async onload(): Promise<void> {
+		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
 		this.statusBarRoot = this.addStatusBarItem();
 		this.statusBarRoot.addClass("encounter-cast-status-root");
 		this.preactMount = new PreactMount(this.statusBarRoot);
@@ -93,6 +105,13 @@ export default class EncounterCastPlugin extends Plugin {
 				await this.openDashboardView();
 			},
 		});
+		this.addCommand({
+			id: "open-encounter-party-settings",
+			name: "Open encounter party settings",
+			callback: () => {
+				this.openPartySettingsModal();
+			},
+		});
 
 		this.registerMarkdownCodeBlockProcessor("encounter", (source, el, ctx) => {
 			el.empty();
@@ -111,6 +130,7 @@ export default class EncounterCastPlugin extends Plugin {
 						monsterName: entry.monsterQuery,
 						resolved: false,
 						challenge: null,
+						xp: null,
 						monster: null,
 					};
 				}
@@ -123,26 +143,48 @@ export default class EncounterCastPlugin extends Plugin {
 					monsterName: resolved.monster.name,
 					resolved: true,
 					challenge: resolved.monster.challenge,
+					xp: resolved.monster.xp,
 					monster: resolved.monster,
 				};
 			});
 			const widgetRoot = el.createDiv();
-			const component = new EncounterBlockWidgetComponent(widgetRoot, {
+			let component: EncounterBlockWidgetComponent;
+			component = new EncounterBlockWidgetComponent(widgetRoot, {
 				title: summary.title,
 				rows,
+				partySettings: {
+					partyMembers: this.settings.partyMembers,
+					partyLevel: this.settings.partyLevel,
+				},
 				onInfo: (monster) => {
 					void this.openMonsterInfo(monster);
 				},
-				onRowsChange: (nextRows) => {
-					void this.persistEncounterRows(ctx, el, summary.title, nextRows);
+				onHoverInfo: (monster, anchorEl) => {
+					void this.openMonsterHoverInfo(monster, anchorEl);
 				},
-				onRunEncounter: (nextRows) => {
-					void this.handleEncounterAction(this.serializeEncounterBody(summary.title, nextRows), "run");
+				onHoverLeave: () => {
+					this.closeMonsterHoverInfo();
 				},
-				onAddToEncounter: (nextRows) => {
-					void this.handleEncounterAction(this.serializeEncounterBody(summary.title, nextRows), "add");
+				onRowsChange: (nextRows, nextTitle) => {
+					void this.persistEncounterRows(ctx, el, nextTitle, nextRows);
+				},
+				onTitleChange: (nextRows, nextTitle) => {
+					void this.persistEncounterRows(ctx, el, nextTitle, nextRows);
+				},
+				onRunEncounter: (nextRows, nextTitle) => {
+					void this.handleEncounterAction(this.serializeEncounterBody(nextTitle, nextRows), "run");
+				},
+				onAddToEncounter: (nextRows, nextTitle) => {
+					void this.handleEncounterAction(this.serializeEncounterBody(nextTitle, nextRows), "add");
+				},
+				onOpenPartySettings: () => {
+					this.openPartySettingsModal();
+				},
+				onDispose: () => {
+					this.encounterWidgetComponents.delete(component);
 				},
 			});
+			this.encounterWidgetComponents.add(component);
 			ctx.addChild(component);
 		});
 
@@ -161,6 +203,8 @@ export default class EncounterCastPlugin extends Plugin {
 	onunload(): void {
 		void this.encounterServer.stop();
 		this.app.workspace.detachLeavesOfType(DM_DASHBOARD_VIEW_TYPE);
+		this.encounterWidgetComponents.clear();
+		this.monsterManager.hideCreatureHoverPreview();
 		this.preactMount?.unmount();
 		this.preactMount = null;
 		this.statusBarRoot = null;
@@ -271,7 +315,7 @@ export default class EncounterCastPlugin extends Plugin {
 		}
 
 		for (const row of rows) {
-			const sanitizedName = row.customName?.replaceAll("'", "").trim() ?? "";
+			const sanitizedName = row.customName?.replace(/'/g, "").trim() ?? "";
 			const customNamePart = sanitizedName ? ` '${sanitizedName}'` : "";
 			lines.push(`${row.quantity}x ${row.monsterQuery}${customNamePart}`);
 		}
@@ -286,50 +330,56 @@ export default class EncounterCastPlugin extends Plugin {
 	): string {
 		const newline = documentText.includes("\r\n") ? "\r\n" : "\n";
 		const lines = documentText.split(/\r?\n/);
-		const sectionLines = sectionInfo.text.split(/\r?\n/);
-		const openingFence = sectionLines[0] ?? "```encounter";
-		const closingFence = sectionLines[sectionLines.length - 1] ?? "```";
-		const updatedSection = [openingFence, ...encounterBody.split("\n"), closingFence].join("\n");
-		const normalizedSection = sectionInfo.text.replace(/\r?\n/g, "\n");
-
-		let start = Math.max(0, sectionInfo.lineStart);
-		let end = Math.min(lines.length, sectionInfo.lineEnd + 1);
-		if (!this.matchesSection(lines, start, end, normalizedSection)) {
-			end = Math.min(lines.length, sectionInfo.lineEnd);
-			if (!this.matchesSection(lines, start, end, normalizedSection)) {
-				const location = this.findSectionLocation(lines, normalizedSection);
-				if (!location) {
-					return documentText;
-				}
-				start = location.start;
-				end = location.end;
-			}
+		const bodyLines = encounterBody.length ? encounterBody.split("\n") : [];
+		const fenceLocation = this.findEncounterFenceRange(lines, sectionInfo);
+		if (!fenceLocation) {
+			return documentText;
 		}
 
-		const replacementLines = updatedSection.split("\n");
-		lines.splice(start, end - start, ...replacementLines);
+		lines.splice(fenceLocation.opening + 1, fenceLocation.closing - fenceLocation.opening - 1, ...bodyLines);
 		return lines.join(newline);
 	}
 
-	private matchesSection(lines: string[], start: number, end: number, normalizedSection: string): boolean {
-		if (end < start) {
-			return false;
-		}
+	private findEncounterFenceRange(
+		lines: string[],
+		sectionInfo: MarkdownSectionInformation,
+	): { opening: number; closing: number } | null {
+		const safeStart = Math.max(0, sectionInfo.lineStart);
+		const safeEnd = Math.min(lines.length - 1, Math.max(safeStart, sectionInfo.lineEnd));
 
-		return lines.slice(start, end).join("\n") === normalizedSection;
-	}
+		for (let index = safeStart; index >= 0; index--) {
+			const line = lines[index]?.trim() ?? "";
+			if (!line.startsWith("```")) {
+				continue;
+			}
 
-	private findSectionLocation(lines: string[], normalizedSection: string): { start: number; end: number } | null {
-		const target = normalizedSection.split("\n");
-		if (!target.length) {
+			if (!/^```encounter(?:\s|$)/i.test(line)) {
+				continue;
+			}
+
+			for (let closeIndex = Math.max(index + 1, safeEnd); closeIndex < lines.length; closeIndex++) {
+				const closingLine = lines[closeIndex]?.trim() ?? "";
+				if (closingLine === "```") {
+					return { opening: index, closing: closeIndex };
+				}
+			}
+
 			return null;
 		}
 
-		for (let start = 0; start <= lines.length - target.length; start++) {
-			const candidate = lines.slice(start, start + target.length);
-			if (candidate.join("\n") === normalizedSection) {
-				return { start, end: start + target.length };
+		for (let index = 0; index < lines.length; index++) {
+			const line = lines[index]?.trim() ?? "";
+			if (!/^```encounter(?:\s|$)/i.test(line)) {
+				continue;
 			}
+
+			for (let closeIndex = index + 1; closeIndex < lines.length; closeIndex++) {
+				const closingLine = lines[closeIndex]?.trim() ?? "";
+				if (closingLine === "```") {
+					return { opening: index, closing: closeIndex };
+				}
+			}
+			return null;
 		}
 
 		return null;
@@ -475,6 +525,37 @@ export default class EncounterCastPlugin extends Plugin {
 		}
 	}
 
+	private async updatePartySettings(settings: EncounterPartySettings): Promise<void> {
+		this.settings = {
+			partyMembers: settings.partyMembers,
+			partyLevel: settings.partyLevel,
+		};
+		await this.saveData(this.settings);
+		this.refreshEncounterDifficultyViews();
+	}
+
+	private openPartySettingsModal(): void {
+		const modal = new PartySettingsModal(
+			this.app,
+			{ partyMembers: this.settings.partyMembers, partyLevel: this.settings.partyLevel },
+			async (settings) => {
+				await this.updatePartySettings(settings);
+				new Notice("Encounter settings saved.");
+			},
+		);
+		modal.open();
+	}
+
+	private refreshEncounterDifficultyViews(): void {
+		const partySettings: EncounterPartySettings = {
+			partyMembers: this.settings.partyMembers,
+			partyLevel: this.settings.partyLevel,
+		};
+		for (const component of this.encounterWidgetComponents) {
+			component.updatePartySettings(partySettings);
+		}
+	}
+
 	private async openMonsterInfo(monster: MonsterRecord): Promise<void> {
 		try {
 			await this.monsterManager.openCreaturePreview(monster);
@@ -482,5 +563,17 @@ export default class EncounterCastPlugin extends Plugin {
 			const message = error instanceof Error ? error.message : "Failed to open creature preview.";
 			new Notice(message);
 		}
+	}
+
+	private async openMonsterHoverInfo(monster: MonsterRecord, anchorEl: HTMLElement): Promise<void> {
+		try {
+			await this.monsterManager.showCreatureHoverPreview(monster, anchorEl);
+		} catch {
+			// Intentionally ignore hover preview failures to avoid noisy notices while mousing around.
+		}
+	}
+
+	private closeMonsterHoverInfo(): void {
+		this.monsterManager.scheduleHideCreatureHoverPreview(500);
 	}
 }

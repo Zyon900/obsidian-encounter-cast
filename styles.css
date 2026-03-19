@@ -47,10 +47,86 @@
 	font-weight: 600;
 }
 
+.encounter-cast-encounter-title-trigger {
+	display: inline;
+	cursor: text;
+}
+
+.encounter-cast-encounter-title input {
+	width: 100%;
+	max-width: 320px;
+}
+
 .encounter-cast-encounter-actions {
+	display: flex;
+	flex-wrap: nowrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	position: relative;
+}
+
+.encounter-cast-encounter-actions-left {
 	display: flex;
 	flex-wrap: wrap;
 	gap: 8px;
+}
+
+.encounter-cast-encounter-actions-left button {
+	width: 28px;
+	min-width: 28px;
+	padding: 0;
+	line-height: 1;
+}
+
+.encounter-cast-encounter-actions-right {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-left: auto;
+}
+
+.encounter-cast-encounter-xp {
+	font-size: 0.85em;
+	color: var(--text-muted);
+	white-space: nowrap;
+}
+
+.encounter-cast-encounter-difficulty {
+	display: inline-flex;
+	align-items: center;
+	padding: 2px 8px;
+	border-radius: 999px;
+	font-size: 0.8em;
+	font-weight: 600;
+	white-space: nowrap;
+}
+
+.encounter-cast-encounter-difficulty.is-low {
+	color: var(--text-success);
+	background: color-mix(in srgb, var(--color-green) 20%, transparent);
+}
+
+.encounter-cast-encounter-difficulty.is-medium {
+	color: var(--text-warning);
+	background: color-mix(in srgb, var(--color-yellow) 24%, transparent);
+}
+
+.encounter-cast-encounter-difficulty.is-high {
+	color: var(--text-error);
+	background: color-mix(in srgb, var(--color-red) 22%, transparent);
+}
+
+.encounter-cast-encounter-settings {
+	position: relative;
+}
+
+.encounter-cast-encounter-settings-trigger {
+	width: 28px;
+	min-width: 28px;
+	padding: 0;
+	font-size: 11px;
+	line-height: 1;
 }
 
 .encounter-cast-encounter-rows {
@@ -123,4 +199,242 @@
 	color: var(--text-muted);
 	min-width: 38px;
 	text-align: right;
+}
+
+.encounter-cast-dashboard-view {
+	padding: 16px;
+	overflow-y: auto;
+}
+
+.encounter-cast-dashboard {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+}
+
+.encounter-cast-dashboard-panel {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	padding: 16px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 14px;
+	background: linear-gradient(180deg, var(--background-secondary), var(--background-primary-alt));
+}
+
+.encounter-cast-dashboard-panel-header {
+	display: flex;
+	justify-content: space-between;
+	gap: 12px;
+	align-items: flex-start;
+}
+
+.encounter-cast-dashboard-panel-header h2 {
+	margin: 0;
+	font-size: 1.1rem;
+}
+
+.encounter-cast-dashboard-panel-header p,
+.encounter-cast-dashboard-invites p {
+	margin: 4px 0 0;
+	color: var(--text-muted);
+}
+
+.encounter-cast-dashboard-server-status {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: flex-end;
+	gap: 8px;
+	font-size: 0.9rem;
+	color: var(--text-muted);
+}
+
+.encounter-cast-dashboard-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+.encounter-cast-dashboard-token {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.encounter-cast-dashboard-token code,
+.encounter-cast-dashboard-invite-row code {
+	padding: 6px 8px;
+	border-radius: 8px;
+	background: var(--background-primary);
+	word-break: break-all;
+}
+
+.encounter-cast-dashboard-subtitle {
+	font-weight: 600;
+}
+
+.encounter-cast-dashboard-invites {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.encounter-cast-dashboard-invite-row {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	gap: 8px;
+	align-items: center;
+}
+
+.encounter-cast-dashboard-combatants {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+
+.encounter-cast-dashboard-empty {
+	padding: 18px;
+	border-radius: 10px;
+	border: 1px dashed var(--background-modifier-border);
+	color: var(--text-muted);
+	text-align: center;
+}
+
+.encounter-cast-combatant {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: space-between;
+	gap: 12px;
+	padding: 12px;
+	border-radius: 12px;
+	background: var(--background-primary);
+	border: 1px solid var(--background-modifier-border);
+}
+
+.encounter-cast-combatant.is-active {
+	border-color: var(--interactive-accent);
+	box-shadow: inset 0 0 0 1px var(--interactive-accent);
+}
+
+.encounter-cast-combatant-main {
+	display: flex;
+	gap: 10px;
+	align-items: flex-start;
+	min-width: 240px;
+	flex: 1 1 320px;
+}
+
+.encounter-cast-combatant-activate {
+	min-width: 86px;
+}
+
+.encounter-cast-combatant-copy {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	min-width: 0;
+}
+
+.encounter-cast-combatant-name {
+	font-weight: 600;
+}
+
+.encounter-cast-combatant-meta {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	color: var(--text-muted);
+	font-size: 0.9rem;
+}
+
+.encounter-cast-combatant-controls {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 12px;
+	align-items: flex-end;
+	justify-content: flex-end;
+	flex: 1 1 280px;
+}
+
+.encounter-cast-combatant-controls label {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	font-size: 0.85rem;
+	color: var(--text-muted);
+}
+
+.encounter-cast-combatant-controls input {
+	width: 88px;
+}
+
+.encounter-cast-combatant-buttons {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+@media (max-width: 720px) {
+	.encounter-cast-dashboard-view {
+		padding: 12px;
+	}
+
+	.encounter-cast-dashboard-panel {
+		padding: 12px;
+	}
+
+	.encounter-cast-dashboard-panel-header {
+		flex-direction: column;
+	}
+
+	.encounter-cast-dashboard-server-status,
+	.encounter-cast-combatant-controls {
+		justify-content: flex-start;
+	}
+
+	.encounter-cast-dashboard-invite-row {
+		grid-template-columns: 1fr;
+	}
+
+	.encounter-cast-encounter-actions {
+		flex-wrap: wrap;
+	}
+
+	.encounter-cast-encounter-actions-right {
+		width: 100%;
+		justify-content: flex-end;
+	}
+}
+
+.encounter-cast-dashboard-qr {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.encounter-cast-dashboard-qr-frame {
+	display: inline-flex;
+	align-self: flex-start;
+	padding: 10px;
+	border-radius: 12px;
+	background: #fff;
+}
+
+.encounter-cast-dashboard-qr-frame svg {
+	display: block;
+	width: 176px;
+	height: 176px;
+}
+
+.encounter-cast-hover-preview {
+	position: absolute;
+	z-index: var(--layer-popover);
+	max-width: min(460px, calc(100vw - 24px));
+	max-height: min(70vh, 720px);
+	overflow: auto;
+	padding: 6px;
+	background: var(--background-primary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 10px;
+	box-shadow: var(--shadow-s);
 }
