@@ -19,4 +19,6 @@ export interface DashboardActions {
 	onSetHp: (combatantId: string, value: string) => void;
 	onSetAc: (combatantId: string, value: string) => void;
 	onOpenMonster: (monster: MonsterRecord) => void;
+	onHoverMonster: (monster: MonsterRecord, anchorEl: HTMLElement) => void;
+	onMonsterHoverLeave: () => void;
 }

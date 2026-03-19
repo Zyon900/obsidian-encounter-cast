@@ -5,6 +5,7 @@ import {
 	type EncounterPartySettings
 } from "../../encounter/encounter-difficulty";
 import type { MonsterRecord } from "../../monsters/types";
+import { MonsterHoverPreviewTrigger } from "../monsters/monster-hover-preview-trigger";
 
 export interface EncounterPreviewRow {
 	id: string;
@@ -32,13 +33,19 @@ interface EncounterBlockWidgetProps {
 	onOpenPartySettings: () => void;
 }
 
+// Renders the interactive preview for an `encounter` codeblock.
+// This component is the UI source of truth while rendered:
+// - local state tracks transient edits (title, row quantities, hover timers)
+// - callbacks persist those edits back into the underlying markdown source
 export function EncounterBlockWidget(props: EncounterBlockWidgetProps) {
+	// Local UI state is seeded from parsed codeblock data and kept in sync via effects.
 	const [rows, setRows] = useState<EncounterPreviewRow[]>(props.rows);
-	const [hoverTimeout, setHoverTimeout] = useState<number | null>(null);
 	const [title, setTitle] = useState<string | null>(props.title);
 	const [titleDraft, setTitleDraft] = useState(props.title ?? "");
 	const [isEditingTitle, setIsEditingTitle] = useState(false);
 	const titleInputRef = useRef<HTMLInputElement | null>(null);
+
+	// Display helpers normalize how names and CR/XP are shown across row variants.
 	const getDisplayName = (row: EncounterPreviewRow) => row.customName ?? row.monsterName;
 	const getCrLabel = (row: EncounterPreviewRow) => {
 		const cr = row.challenge ?? "-";
@@ -48,6 +55,7 @@ export function EncounterBlockWidget(props: EncounterBlockWidgetProps) {
 		return `CR ${cr} (${row.xp}xp)`;
 	};
 
+	// Keep widget state aligned with external rerenders (e.g. source updates).
 	useEffect(() => {
 		setRows(props.rows);
 	}, [props.rows]);
@@ -57,13 +65,9 @@ export function EncounterBlockWidget(props: EncounterBlockWidgetProps) {
 			setTitleDraft(props.title ?? "");
 		}
 	}, [props.title, isEditingTitle]);
-	useEffect(() => {
-		return () => {
-			if (hoverTimeout !== null) {
-				window.clearTimeout(hoverTimeout);
-			}
-		};
-	}, [hoverTimeout]);
+
+	// When title editing starts, immediately focus and place the caret at the end.
+	// The zero-timeout second pass handles cases where the input mounts a tick later.
 	useEffect(() => {
 		if (!isEditingTitle || !titleInputRef.current) {
 			return;
@@ -81,6 +85,8 @@ export function EncounterBlockWidget(props: EncounterBlockWidgetProps) {
 		return () => window.clearTimeout(timerId);
 	}, [isEditingTitle]);
 
+	// Quantity updates are applied optimistically in the rendered preview and
+	// propagated to the parent so the markdown codeblock is rewritten accordingly.
 	const updateRowCount = (id: string, delta: number) => {
 		setRows((currentRows) => {
 			const updated = currentRows
@@ -93,27 +99,9 @@ export function EncounterBlockWidget(props: EncounterBlockWidgetProps) {
 	const totalXp = computeEncounterTotalXp(rows);
 	const difficulty = computeEncounterDifficulty(totalXp, props.partySettings);
 	const difficultyLabel = difficulty ? difficulty.charAt(0).toUpperCase() + difficulty.slice(1) : null;
-	const startHoverPreview = (monster: MonsterRecord | null, anchorEl: HTMLElement) => {
-		if (!monster) {
-			return;
-		}
 
-		if (hoverTimeout !== null) {
-			window.clearTimeout(hoverTimeout);
-		}
-
-		const timeoutId = window.setTimeout(() => {
-			props.onHoverInfo(monster, anchorEl);
-		}, 500);
-		setHoverTimeout(timeoutId);
-	};
-	const stopHoverPreview = () => {
-		if (hoverTimeout !== null) {
-			window.clearTimeout(hoverTimeout);
-			setHoverTimeout(null);
-		}
-		props.onHoverLeave();
-	};
+	// Title edits are inline and persisted on commit; empty titles become `null`
+	// so serialization can fall back to "Untitled encounter" behavior.
 	const startTitleEdit = () => {
 		setIsEditingTitle(true);
 		setTitleDraft(title ?? "");
@@ -132,6 +120,7 @@ export function EncounterBlockWidget(props: EncounterBlockWidgetProps) {
 
 	return (
 		<div className="encounter-cast-encounter-widget">
+			{/* Click-to-edit title keeps the same visual style when not editing. */}
 			<div className="encounter-cast-encounter-title">
 				{isEditingTitle ? (
 					<input
@@ -173,6 +162,8 @@ export function EncounterBlockWidget(props: EncounterBlockWidgetProps) {
 					</span>
 				)}
 			</div>
+
+			{/* Encounter rows support live count adjustments and monster hover/info actions. */}
 			<div className="encounter-cast-encounter-rows">
 				{rows.map((row) => (
 					<div key={row.id} className="encounter-cast-encounter-row">
@@ -194,13 +185,11 @@ export function EncounterBlockWidget(props: EncounterBlockWidgetProps) {
 								</button>
 							</div>
 							<span className="encounter-cast-encounter-row-count">{row.quantity}x</span>
-							<span
+							<MonsterHoverPreviewTrigger
+								monster={row.monster}
 								className="encounter-cast-encounter-row-name"
-								onMouseEnter={(event) => {
-									const target = event.currentTarget as HTMLElement;
-									startHoverPreview(row.monster, target);
-								}}
-								onMouseLeave={stopHoverPreview}
+								onHoverInfo={props.onHoverInfo}
+								onHoverLeave={props.onHoverLeave}
 							>
 								{row.customName ? (
 									<>
@@ -214,7 +203,7 @@ export function EncounterBlockWidget(props: EncounterBlockWidgetProps) {
 										{row.monsterName}
 									</span>
 								)}
-							</span>
+							</MonsterHoverPreviewTrigger>
 						</div>
 						<div className="encounter-cast-encounter-row-right">
 							{row.resolved ? <span className="encounter-cast-encounter-row-cr">{getCrLabel(row)}</span> : null}
@@ -235,6 +224,8 @@ export function EncounterBlockWidget(props: EncounterBlockWidgetProps) {
 					</div>
 				))}
 			</div>
+
+			{/* Primary actions (run/add) plus derived XP and optional difficulty summary. */}
 			<div className="encounter-cast-encounter-actions">
 				<div className="encounter-cast-encounter-actions-left">
 					<button

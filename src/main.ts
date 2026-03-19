@@ -80,6 +80,12 @@ export default class EncounterCastPlugin extends Plugin {
 					onOpenMonster: (monster) => {
 						void this.openMonsterInfo(monster);
 					},
+					onHoverMonster: (monster, anchorEl) => {
+						void this.openMonsterHoverInfo(monster, anchorEl);
+					},
+					onMonsterHoverLeave: () => {
+						this.closeMonsterHoverInfo();
+					},
 				}),
 		);
 
@@ -576,3 +582,4 @@ export default class EncounterCastPlugin extends Plugin {
 		this.monsterManager.scheduleHideCreatureHoverPreview(500);
 	}
 }
+

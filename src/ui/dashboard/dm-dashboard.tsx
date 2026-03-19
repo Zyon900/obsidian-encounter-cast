@@ -1,6 +1,7 @@
 import QRCode from "qrcode";
 import { useEffect, useState } from "preact/hooks";
 import type { Combatant } from "../../encounter/combat-session";
+import { MonsterHoverPreviewTrigger } from "../monsters/monster-hover-preview-trigger";
 import type { DashboardActions, DashboardViewModel } from "./types";
 
 interface DmDashboardProps {
@@ -178,7 +179,13 @@ function CombatantRow({ combatant, isActive, isFirst, isLast, actions }: Combata
 					{isActive ? "Active" : "Set active"}
 				</button>
 				<div className="encounter-cast-combatant-copy">
-					<div className="encounter-cast-combatant-name">{combatant.name}</div>
+					<MonsterHoverPreviewTrigger
+						monster={combatant.monster}
+						onHoverInfo={actions.onHoverMonster}
+						onHoverLeave={actions.onMonsterHoverLeave}
+					>
+						<div className="encounter-cast-combatant-name">{combatant.name}</div>
+					</MonsterHoverPreviewTrigger>
 					<div className="encounter-cast-combatant-meta">
 						<span>{combatant.monsterName}</span>
 						<span>CR {combatant.challenge ?? "-"}</span>
