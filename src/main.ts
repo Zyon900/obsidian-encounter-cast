@@ -1,4 +1,6 @@
 import { Notice, Plugin } from "obsidian";
+import { FantasyStatblocksAdapter } from "./monsters/fantasy-statblocks-adapter";
+import { MonsterManager } from "./monsters/monster-manager";
 import { EncounterServer } from "./network/encounter-server";
 import { PreactMount } from "./ui/preact-mount";
 import { CleanupRegistry } from "./utils/cleanup-registry";
@@ -6,6 +8,7 @@ import { CleanupRegistry } from "./utils/cleanup-registry";
 export default class EncounterCastPlugin extends Plugin {
 	private readonly cleanupRegistry = new CleanupRegistry();
 	private readonly encounterServer = new EncounterServer();
+	private readonly monsterManager = new MonsterManager(new FantasyStatblocksAdapter(this.app));
 	private preactMount: PreactMount | null = null;
 	private statusBarRoot: HTMLElement | null = null;
 
@@ -13,25 +16,17 @@ export default class EncounterCastPlugin extends Plugin {
 		this.statusBarRoot = this.addStatusBarItem();
 		this.statusBarRoot.addClass("encounter-cast-status-root");
 		this.preactMount = new PreactMount(this.statusBarRoot);
+		await this.monsterManager.initialize();
 		this.renderFoundationView();
+		this.maybeNotifyMonsterState();
 
 		this.addCommand({
-			id: "start-local-server",
-			name: "Start local server",
+			id: "refresh-monster-cache",
+			name: "Refresh monster cache",
 			callback: async () => {
-				const state = await this.encounterServer.start();
+				const refreshed = this.monsterManager.refreshCache();
 				this.renderFoundationView();
-				new Notice(`Server started on port ${state.port ?? "unknown"}.`);
-			},
-		});
-
-		this.addCommand({
-			id: "stop-local-server",
-			name: "Stop local server",
-			callback: async () => {
-				await this.encounterServer.stop();
-				this.renderFoundationView();
-				new Notice("Server stopped.");
+				this.maybeNotifyMonsterState(refreshed ? "Monster cache refreshed." : undefined);
 			},
 		});
 
@@ -54,9 +49,26 @@ export default class EncounterCastPlugin extends Plugin {
 
 	private renderFoundationView(): void {
 		const state = this.encounterServer.getState();
+		const monsterState = this.monsterManager.getState();
 		this.preactMount?.update({
 			serverRunning: state.running,
 			serverPort: state.port,
+			monsterReady: monsterState.ready,
+			monsterCount: monsterState.cachedCount,
+			monsterError: monsterState.error,
 		});
 	}
+
+	private maybeNotifyMonsterState(message?: string): void {
+		const state = this.monsterManager.getState();
+		if (message) {
+			new Notice(message);
+			return;
+		}
+
+		if (state.error) {
+			new Notice(state.error);
+		}
+	}
+
 }
