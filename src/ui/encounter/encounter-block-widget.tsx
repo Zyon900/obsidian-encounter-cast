@@ -1,10 +1,11 @@
-import { useState } from "preact/hooks";
+import { useEffect, useState } from "preact/hooks";
 import type { MonsterRecord } from "../../monsters/types";
 
 export interface EncounterPreviewRow {
 	id: string;
 	quantity: number;
 	customName: string | null;
+	monsterQuery: string;
 	monsterName: string;
 	resolved: boolean;
 	challenge: string | null;
@@ -15,19 +16,25 @@ interface EncounterBlockWidgetProps {
 	title: string | null;
 	rows: EncounterPreviewRow[];
 	onInfo: (monster: MonsterRecord) => void;
-	onRunEncounter: () => void;
-	onAddToEncounter: () => void;
+	onRowsChange: (rows: EncounterPreviewRow[]) => void;
+	onRunEncounter: (rows: EncounterPreviewRow[]) => void;
+	onAddToEncounter: (rows: EncounterPreviewRow[]) => void;
 }
 
 export function EncounterBlockWidget(props: EncounterBlockWidgetProps) {
 	const [rows, setRows] = useState<EncounterPreviewRow[]>(props.rows);
 	const getDisplayName = (row: EncounterPreviewRow) => row.customName ?? row.monsterName;
 
+	useEffect(() => {
+		setRows(props.rows);
+	}, [props.rows]);
+
 	const updateRowCount = (id: string, delta: number) => {
 		setRows((currentRows) => {
 			const updated = currentRows
 				.map((row) => (row.id === id ? { ...row, quantity: row.quantity + delta } : row))
 				.filter((row) => row.quantity > 0);
+			props.onRowsChange(updated);
 			return updated;
 		});
 	};
@@ -91,13 +98,13 @@ export function EncounterBlockWidget(props: EncounterBlockWidgetProps) {
 				))}
 			</div>
 			<div className="encounter-cast-encounter-actions">
-				<button type="button" onClick={props.onRunEncounter}>
+				<button type="button" onClick={() => props.onRunEncounter(rows)}>
 					Run encounter
 				</button>
-				<button type="button" onClick={props.onAddToEncounter}>
+				<button type="button" onClick={() => props.onAddToEncounter(rows)}>
 					Add to encounter
 				</button>
 			</div>
-				</div>
+		</div>
 	);
 }

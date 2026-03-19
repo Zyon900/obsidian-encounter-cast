@@ -7,8 +7,9 @@ interface EncounterBlockWidgetComponentProps {
 	title: string | null;
 	rows: EncounterPreviewRow[];
 	onInfo: (monster: MonsterRecord) => void;
-	onRunEncounter: () => void;
-	onAddToEncounter: () => void;
+	onRowsChange: (rows: EncounterPreviewRow[]) => void;
+	onRunEncounter: (rows: EncounterPreviewRow[]) => void;
+	onAddToEncounter: (rows: EncounterPreviewRow[]) => void;
 }
 
 export class EncounterBlockWidgetComponent extends MarkdownRenderChild {
@@ -33,6 +34,7 @@ export class EncounterBlockWidgetComponent extends MarkdownRenderChild {
 				title={this.props.title}
 				rows={this.props.rows}
 				onInfo={this.props.onInfo}
+				onRowsChange={this.props.onRowsChange}
 				onRunEncounter={this.props.onRunEncounter}
 				onAddToEncounter={this.props.onAddToEncounter}
 			/>,
