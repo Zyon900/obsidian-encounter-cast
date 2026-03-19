@@ -1,0 +1,37 @@
+.encounter-cast-status-root {
+	display: flex;
+	align-items: center;
+	padding: 0;
+}
+
+.encounter-cast-shell {
+	display: inline-flex;
+	align-items: center;
+	gap: 10px;
+	padding: 2px 8px;
+	border-radius: 8px;
+	background: var(--background-primary-alt);
+	border: 1px solid var(--background-modifier-border);
+	color: var(--text-normal);
+}
+
+.encounter-cast-title {
+	font-weight: 600;
+	font-size: 12px;
+}
+
+.encounter-cast-meta {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	font-size: 11px;
+	color: var(--text-muted);
+}
+
+.encounter-cast-meta .is-online {
+	color: var(--text-success);
+}
+
+.encounter-cast-meta .is-offline {
+	color: var(--text-warning);
+}
