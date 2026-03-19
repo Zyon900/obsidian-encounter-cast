@@ -10,6 +10,7 @@ if you want to view the source, please visit the github repository of this plugi
 `;
 
 const prod = (process.argv[2] === "production");
+const nodeBuiltins = [...builtinModules, ...builtinModules.map((name) => `node:${name}`)];
 
 const context = await esbuild.context({
 	banner: {
@@ -31,9 +32,11 @@ const context = await esbuild.context({
 		"@lezer/common",
 		"@lezer/highlight",
 		"@lezer/lr",
-		...builtinModules],
+		...nodeBuiltins],
 	format: "cjs",
 	target: "es2018",
+	jsx: "automatic",
+	jsxImportSource: "preact",
 	logLevel: "info",
 	sourcemap: prod ? false : "inline",
 	treeShaking: true,
