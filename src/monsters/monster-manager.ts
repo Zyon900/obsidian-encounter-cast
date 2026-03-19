@@ -1,4 +1,4 @@
-import { prepareFuzzySearch } from "obsidian";
+import { prepareFuzzySearch, type App } from "obsidian";
 import { FantasyStatblocksAdapter } from "./fantasy-statblocks-adapter";
 import type { MonsterManagerState, MonsterRecord, MonsterSearchHit } from "./types";
 
@@ -52,8 +52,8 @@ export class MonsterManager {
 	private cachedNames: string[] = [];
 	private cacheLoaded = false;
 
-	constructor(adapter: FantasyStatblocksAdapter) {
-		this.adapter = adapter;
+	constructor(app: App) {
+		this.adapter = new FantasyStatblocksAdapter(app);
 	}
 
 	getState(): MonsterManagerState {

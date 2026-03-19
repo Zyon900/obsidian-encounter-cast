@@ -16,7 +16,6 @@ import { parseEncounterBlock, summarizeEncounterSource } from "./encounter/encou
 import { resolveEncounterEntries, type ResolveEncounterResult } from "./encounter/encounter-resolver";
 import { EncounterSuggest } from "./encounter/encounter-suggest";
 import type { MonsterRecord } from "./monsters/types";
-import { FantasyStatblocksAdapter } from "./monsters/fantasy-statblocks-adapter";
 import { MonsterManager } from "./monsters/monster-manager";
 import { EncounterServer } from "./network/encounter-server";
 import type { EncounterPreviewRow } from "./ui/encounter/encounter-block-widget";
@@ -36,7 +35,7 @@ const DEFAULT_SETTINGS: EncounterCastSettings = {
 export default class EncounterCastPlugin extends Plugin {
 	private readonly cleanupRegistry = new CleanupRegistry();
 	private readonly encounterServer = new EncounterServer();
-	private readonly monsterManager = new MonsterManager(new FantasyStatblocksAdapter(this.app));
+	private readonly monsterManager = new MonsterManager(this.app);
 	private preactMount: PreactMount | null = null;
 	private statusBarRoot: HTMLElement | null = null;
 	private currentSession: CombatSession | null = null;
