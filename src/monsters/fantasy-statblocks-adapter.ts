@@ -94,10 +94,21 @@ export class FantasyStatblocksAdapter {
 		this.hideCreatureHoverPreview();
 		this.hoverContainer.empty();
 		this.hoverContainer.style.display = "block";
+		this.hoverContainer.style.width = "min(460px, calc(100vw - 24px))";
+		this.hoverContainer.style.maxWidth = "calc(100vw - 24px)";
+		this.hoverContainer.style.maxHeight = "calc(100vh - 24px)";
 		this.hoverComponent = api.render(creatureToRender, this.hoverContainer);
 
+		// Reposition multiple times to account for late layout growth while the
+		// statblock renderer mounts nested content.
 		window.requestAnimationFrame(() => {
 			this.positionHoverContainer(anchorEl);
+			window.requestAnimationFrame(() => {
+				this.positionHoverContainer(anchorEl);
+			});
+			window.setTimeout(() => {
+				this.positionHoverContainer(anchorEl);
+			}, 50);
 		});
 	}
 
@@ -165,18 +176,80 @@ export class FantasyStatblocksAdapter {
 		const anchorRect = anchorEl.getBoundingClientRect();
 		const previewRect = this.hoverContainer.getBoundingClientRect();
 		const margin = 12;
-		const top = Math.min(
-			Math.max(margin, anchorRect.top + window.scrollY),
-			window.scrollY + window.innerHeight - previewRect.height - margin,
-		);
+		const viewport = this.getViewportBounds();
+		const minTop = viewport.top + margin;
+		const maxTop = viewport.top + Math.max(margin, viewport.height - previewRect.height - margin);
+		const preferredTop = anchorRect.top + window.scrollY;
+		const top = this.clamp(preferredTop, minTop, maxTop);
+
+		const minLeft = viewport.left + margin;
+		const maxLeft = viewport.left + Math.max(margin, viewport.width - previewRect.width - margin);
 		const preferredLeft = anchorRect.right + margin + window.scrollX;
-		const fitsRight = preferredLeft + previewRect.width <= window.scrollX + window.innerWidth - margin;
-		const left = fitsRight
+		const fitsRight = preferredLeft + previewRect.width <= viewport.left + viewport.width - margin;
+		const candidateLeft = fitsRight
 			? preferredLeft
 			: Math.max(margin + window.scrollX, anchorRect.left + window.scrollX - previewRect.width - margin);
+		const left = this.clamp(candidateLeft, minLeft, maxLeft);
 
 		this.hoverContainer.style.top = `${top}px`;
 		this.hoverContainer.style.left = `${left}px`;
+		this.correctHorizontalOverflow(margin);
+	}
+
+	private clamp(value: number, min: number, max: number): number {
+		if (value < min) {
+			return min;
+		}
+		if (value > max) {
+			return max;
+		}
+		return value;
+	}
+
+	private getViewportBounds(): { left: number; top: number; width: number; height: number } {
+		const viewport = window.visualViewport;
+		if (!viewport) {
+			return {
+				left: window.scrollX,
+				top: window.scrollY,
+				width: window.innerWidth,
+				height: window.innerHeight,
+			};
+		}
+
+		return {
+			left: window.scrollX + viewport.offsetLeft,
+			top: window.scrollY + viewport.offsetTop,
+			width: viewport.width,
+			height: viewport.height,
+		};
+	}
+
+	private correctHorizontalOverflow(margin: number): void {
+		if (!this.hoverContainer) {
+			return;
+		}
+
+		const viewport = this.getViewportBounds();
+		const rect = this.hoverContainer.getBoundingClientRect();
+		const leftLimit = viewport.left + margin;
+		const rightLimit = viewport.left + viewport.width - margin;
+		const currentLeft = Number.parseFloat(this.hoverContainer.style.left);
+		if (!Number.isFinite(currentLeft)) {
+			return;
+		}
+
+		const pageRectLeft = rect.left + window.scrollX;
+		const pageRectRight = rect.right + window.scrollX;
+		if (pageRectRight > rightLimit) {
+			const shiftLeft = pageRectRight - rightLimit;
+			this.hoverContainer.style.left = `${Math.max(leftLimit, currentLeft - shiftLeft)}px`;
+			return;
+		}
+		if (pageRectLeft < leftLimit) {
+			const shiftRight = leftLimit - pageRectLeft;
+			this.hoverContainer.style.left = `${currentLeft + shiftRight}px`;
+		}
 	}
 
 	private clearHoverHideTimeout(): void {
