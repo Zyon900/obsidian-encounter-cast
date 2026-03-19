@@ -35,3 +35,92 @@
 .encounter-cast-meta .is-offline {
 	color: var(--text-warning);
 }
+
+.encounter-cast-encounter-widget {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	padding-top: 4px;
+}
+
+.encounter-cast-encounter-title {
+	font-weight: 600;
+}
+
+.encounter-cast-encounter-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+.encounter-cast-encounter-rows {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.encounter-cast-encounter-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 10px;
+	padding: 2px 0;
+}
+
+.encounter-cast-encounter-row-left {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+}
+
+.encounter-cast-encounter-row-count {
+	font-weight: 600;
+	color: var(--text-muted);
+}
+
+.encounter-cast-encounter-row-name {
+	display: inline-flex;
+	align-items: baseline;
+	gap: 6px;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.encounter-cast-encounter-row-monster-name {
+	color: var(--text-muted);
+	opacity: 0.75;
+}
+
+.encounter-cast-encounter-row-unresolved-name {
+	color: var(--text-error);
+	opacity: 1;
+}
+
+.encounter-cast-encounter-row-stepper {
+	display: inline-flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.encounter-cast-encounter-row-stepper button {
+	height: 14px;
+	min-height: 14px;
+	line-height: 12px;
+	padding: 0 4px;
+	font-size: 10px;
+}
+
+.encounter-cast-encounter-row-right {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.encounter-cast-encounter-row-cr {
+	font-size: 0.85em;
+	color: var(--text-muted);
+	min-width: 38px;
+	text-align: right;
+}
