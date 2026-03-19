@@ -2,6 +2,7 @@ export interface MonsterRecord {
 	id: string;
 	name: string;
 	challenge: string | null;
+	xp: number | null;
 	hp: number | null;
 	ac: number | null;
 	dex: number | null;
