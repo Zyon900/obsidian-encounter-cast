@@ -1,6 +1,7 @@
 import esbuild from "esbuild";
 import process from "process";
 import { builtinModules } from 'node:module';
+import { syncPluginBuildOutputs } from "./sync-build-to-vault.mjs";
 
 const banner =
 `/*
@@ -42,6 +43,20 @@ const context = await esbuild.context({
 	treeShaking: true,
 	outfile: "main.js",
 	minify: prod,
+	plugins: [
+		{
+			name: "copy-to-obsidian-vault",
+			setup(build) {
+				build.onEnd((result) => {
+					if (result.errors.length > 0) {
+						return;
+					}
+
+					syncPluginBuildOutputs({ reason: prod ? "build" : "dev" });
+				});
+			},
+		},
+	],
 });
 
 if (prod) {

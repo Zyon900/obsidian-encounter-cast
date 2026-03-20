@@ -1,4 +1,5 @@
 import { readFileSync, writeFileSync } from "node:fs";
+import { syncPluginBuildOutputs } from "./sync-build-to-vault.mjs";
 
 export const orderedSources = [
 	"src/styles/status.css",
@@ -24,6 +25,7 @@ export function buildStyles() {
 		.join("\n\n");
 
 	writeFileSync("styles.css", `${header}${body}\n`, "utf8");
+	syncPluginBuildOutputs({ reason: "styles" });
 }
 
 buildStyles();
