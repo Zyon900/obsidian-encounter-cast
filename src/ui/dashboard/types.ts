@@ -18,6 +18,7 @@ export interface DashboardActions {
 	onCopyInvite: (url: string) => void;
 	onNextTurn: () => void;
 	onAddMonster: () => void;
+	onClearMonsters: () => void;
 	onActivateCombatant: (combatantId: string) => void;
 	onMoveCombatant: (combatantId: string, direction: "up" | "down") => void;
 	onSetHp: (combatantId: string, value: string) => void;
@@ -27,4 +28,5 @@ export interface DashboardActions {
 	onHoverMonster: (monster: MonsterRecord, anchorEl: HTMLElement) => void;
 	onMonsterHoverLeave: () => void;
 }
+
 

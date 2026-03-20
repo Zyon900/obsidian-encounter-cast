@@ -79,6 +79,9 @@ export default class EncounterCastPlugin extends Plugin {
 					onAddMonster: () => {
 						this.openAddMonsterModal();
 					},
+					onClearMonsters: () => {
+						this.clearMonstersFromSession();
+					},
 					onActivateCombatant: (combatantId) => {
 						this.activateCombatant(combatantId);
 					},
@@ -525,7 +528,7 @@ export default class EncounterCastPlugin extends Plugin {
 
 		this.encounterRunning = false;
 		this.renderDashboardView();
-		new Notice("Encounter paused.");
+		new Notice("Encounter stopped.");
 	}
 
 	private openAddMonsterModal(): void {
@@ -558,6 +561,34 @@ export default class EncounterCastPlugin extends Plugin {
 		new Notice(`${monster.name} added to encounter.`);
 	}
 
+	private clearMonstersFromSession(): void {
+		if (!this.currentSession) {
+			return;
+		}
+
+		const monsterCount = this.currentSession.combatants.filter((combatant) => combatant.isPlayer !== true).length;
+		if (monsterCount === 0) {
+			new Notice("No monsters to clear.");
+			return;
+		}
+
+		const playerCombatants = this.getPlayerCombatants();
+		const activeId = this.currentSession.combatants[this.currentSession.activeIndex]?.id ?? null;
+		const activeIndex = activeId ? playerCombatants.findIndex((combatant) => combatant.id === activeId) : -1;
+
+		if (this.encounterRunning && playerCombatants.length === 0) {
+			this.encounterRunning = false;
+		}
+
+		this.updateSession({
+			...this.currentSession,
+			combatants: playerCombatants,
+			activeIndex: activeIndex >= 0 ? activeIndex : 0,
+			round: playerCombatants.length > 0 ? this.currentSession.round : 1,
+			updatedAt: new Date().toISOString(),
+		});
+		new Notice(monsterCount === 1 ? "1 monster removed." : `${monsterCount} monsters removed.`);
+	}
 	private advanceTurn(): void {
 		if (!this.currentSession || !this.encounterRunning) {
 			return;
@@ -731,6 +762,11 @@ export default class EncounterCastPlugin extends Plugin {
 		this.monsterManager.scheduleHideCreatureHoverPreview(500);
 	}
 }
+
+
+
+
+
 
 
 

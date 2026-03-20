@@ -11,6 +11,12 @@
 	position: relative;
 }
 
+.encounter-cast-dashboard-encounter {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+
 .encounter-cast-dashboard-panel {
 	display: flex;
 	flex-direction: column;
@@ -173,6 +179,7 @@
 	bottom: 10px;
 	align-self: center;
 	display: inline-flex;
+	--encounter-toolbar-gap: 8px;
 	gap: 8px;
 	padding: 8px;
 	border-radius: 999px;
@@ -212,16 +219,19 @@
 .encounter-cast-dashboard-icon-button.is-stopped {
 	color: var(--color-red);
 }
+.encounter-cast-dashboard-icon-button.has-divider {
+	position: relative;
+	margin-left: var(--encounter-toolbar-gap);
+}
 
-.encounter-cast-dashboard-modal-backdrop {
-	position: fixed;
-	inset: 0;
-	z-index: var(--layer-modal);
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	padding: 16px;
-	background: color-mix(in srgb, var(--background-primary) 36%, transparent);
+.encounter-cast-dashboard-icon-button.has-divider::before {
+	content: "";
+	position: absolute;
+	left: calc(-1 * var(--encounter-toolbar-gap));
+	top: 0;
+	bottom: 0;
+	width: 1px;
+	background: var(--background-modifier-border);
 }
 
 .encounter-cast-dashboard-modal {
@@ -298,6 +308,24 @@
 	color: var(--color-red);
 	font-weight: 700;
 }
+
+
+
+
+
+
+
+.encounter-cast-dashboard-icon-button .encounter-cast-dashboard-icon svg {
+	width: 16px;
+	height: 16px;
+	display: block;
+}
+
+.encounter-cast-dashboard-icon-button.has-divider .encounter-cast-dashboard-icon {
+	transform: translateX(0.5px);
+}
+
+
 
 
 

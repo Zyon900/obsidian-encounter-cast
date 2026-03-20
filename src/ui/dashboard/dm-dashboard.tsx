@@ -19,45 +19,7 @@ export function DmDashboard({ model, actions }: DmDashboardProps) {
 
 	return (
 		<div className="encounter-cast-dashboard">
-			<section className="encounter-cast-dashboard-panel">
-				<div className="encounter-cast-dashboard-panel-header">
-					<div>
-						<h2>DM dashboard</h2>
-						<p>Control the active encounter and expose the session over the local network.</p>
-					</div>
-					<div className="encounter-cast-dashboard-server-status">
-						<span className={model.serverRunning ? "is-online" : "is-offline"}>
-							{model.serverRunning ? "Server online" : "Server offline"}
-						</span>
-						{model.serverPort !== null ? <span>Port {model.serverPort}</span> : null}
-					</div>
-				</div>
-
-				{model.roomToken ? (
-					<div className="encounter-cast-dashboard-token">
-						<span>Room token</span>
-						<code>{model.roomToken}</code>
-					</div>
-				) : null}
-
-				<div className="encounter-cast-dashboard-invites">
-					<div className="encounter-cast-dashboard-subtitle">Invite links</div>
-					{model.inviteUrls.length > 0 ? (
-						model.inviteUrls.map((url) => (
-							<div key={url} className="encounter-cast-dashboard-invite-row">
-								<code>{url}</code>
-								<button type="button" onClick={() => actions.onCopyInvite(url)}>
-									Copy
-								</button>
-							</div>
-						))
-					) : (
-						<p>No invite links until the server is running.</p>
-					)}
-				</div>
-			</section>
-
-			<section className="encounter-cast-dashboard-panel">
+			<section className="encounter-cast-dashboard-encounter">
 				<div className="encounter-cast-dashboard-panel-header">
 					<div>
 						<h2>{session?.title ?? "Current encounter"}</h2>
@@ -107,10 +69,16 @@ export function DmDashboard({ model, actions }: DmDashboardProps) {
 					disabled={false}
 				/>
 				<IconButton
+					icon="trash"
+					title="Clear monsters"
+					onClick={actions.onClearMonsters}
+					disabled={!hasEncounter}
+				/>
+				<IconButton
 					icon="power"
 					title={model.serverRunning ? "Stop server" : "Start server"}
 					onClick={model.serverRunning ? actions.onStopServer : actions.onStartServer}
-					className={model.serverRunning ? "is-running" : "is-stopped"}
+					className={`has-divider ${model.serverRunning ? "is-running" : "is-stopped"}`}
 				/>
 				<IconButton
 					icon="copy"
@@ -319,6 +287,9 @@ function CombatantRow({ combatant, isActive, isFirst, isLast, actions }: Combata
 		</div>
 	);
 }
+
+
+
 
 
 
