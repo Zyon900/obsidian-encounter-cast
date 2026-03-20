@@ -9,6 +9,7 @@ export interface Combatant {
 	challenge: string | null;
 	hpCurrent: number | null;
 	hpMax: number | null;
+	tempHp: number;
 	ac: number | null;
 	dexMod: number | null;
 	initiative: number | null;
@@ -162,6 +163,26 @@ export function setCombatantHp(session: CombatSession, combatantId: string, hpCu
 	}));
 }
 
+export function setCombatantHpMax(session: CombatSession, combatantId: string, hpMax: number | null): CombatSession {
+	return updateCombatant(session, combatantId, (combatant) => {
+		const nextHpMax = hpMax === null ? null : Math.max(0, hpMax);
+		const nextHpCurrent =
+			combatant.hpCurrent === null || nextHpMax === null ? combatant.hpCurrent : Math.min(combatant.hpCurrent, nextHpMax);
+		return {
+			...combatant,
+			hpMax: nextHpMax,
+			hpCurrent: nextHpCurrent,
+		};
+	});
+}
+
+export function setCombatantTempHp(session: CombatSession, combatantId: string, tempHp: number): CombatSession {
+	return updateCombatant(session, combatantId, (combatant) => ({
+		...combatant,
+		tempHp: Math.max(0, tempHp),
+	}));
+}
+
 export function setCombatantAc(session: CombatSession, combatantId: string, ac: number | null): CombatSession {
 	return updateCombatant(session, combatantId, (combatant) => ({
 		...combatant,
@@ -259,6 +280,7 @@ function expandCombatants(
 				challenge: item.monster.challenge,
 				hpCurrent: item.monster.hp ?? item.monster.max_hp,
 				hpMax: item.monster.max_hp ?? item.monster.hp,
+				tempHp: 0,
 				ac: item.monster.ac,
 				dexMod: item.monster.dex_mod,
 				initiative: initiativeRoll?.total ?? null,
@@ -339,7 +361,7 @@ function stamp(session: CombatSession): CombatSession {
 function rollInitiativeForMonster(dexMod: number | null): { roll: number; total: number; isCriticalFailure: boolean } {
 	const modifier = dexMod ?? 0;
 	const d20 = Math.floor(Math.random() * 20) + 1;
-	const total = Math.max(1, d20 + modifier);
+	const total = d20 === 20 ? Math.max(20, d20 + modifier) : Math.max(1, d20 + modifier);
 	return {
 		roll: d20,
 		total,

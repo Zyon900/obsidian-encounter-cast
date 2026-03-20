@@ -201,6 +201,10 @@ export class MonsterManager {
 			max_hp: this.readNumber(record.max_hp) ?? this.readNumber(record.hpMax) ?? this.readHpValue(record.hp),
 			ac: this.readNumber(record.ac),
 			dex_mod: this.readDexMod(record),
+			damage_vulnerabilities: this.readStringList(record.damage_vulnerabilities),
+			damage_resistances: this.readStringList(record.damage_resistances),
+			damage_immunities: this.readStringList(record.damage_immunities),
+			condition_immunities: this.readStringList(record.condition_immunities),
 			source: source ?? null,
 			slug,
 			raw: rawMonster,
@@ -264,6 +268,46 @@ export class MonsterManager {
 			return Number.isFinite(parsed) ? parsed : null;
 		}
 		return null;
+	}
+
+	private readStringList(value: unknown): string[] {
+		if (value === null || value === undefined) {
+			return [];
+		}
+
+		if (typeof value === "string") {
+			return value
+				.split(/[,;]+/)
+				.map((part) => part.trim())
+				.filter((part) => part.length > 0);
+		}
+
+		if (Array.isArray(value)) {
+			const collected: string[] = [];
+			for (const item of value) {
+				const nested = this.readStringList(item);
+				for (const entry of nested) {
+					if (!collected.includes(entry)) {
+						collected.push(entry);
+					}
+				}
+			}
+			return collected;
+		}
+
+		if (typeof value === "object") {
+			const record = value as Record<string, unknown>;
+			const common =
+				this.readString(record.name) ??
+				this.readString(record.entry) ??
+				this.readString(record.text) ??
+				this.readString(record.value);
+			if (common) {
+				return [common];
+			}
+		}
+
+		return [];
 	}
 
 	private readChallenge(value: unknown): string | null {

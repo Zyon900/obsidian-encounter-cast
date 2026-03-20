@@ -4,12 +4,13 @@ import {
 	advanceCombatTurn,
 	createCombatSession,
 	moveCombatant,
-	rollCombatantInitiative,
 	rollMonsterInitiative,
 	setActiveCombatant,
 	setCombatantAc,
 	setCombatantDexMod,
 	setCombatantHp,
+	setCombatantHpMax,
+	setCombatantTempHp,
 	type CombatSession,
 } from "./encounter/combat-session";
 import { EncounterBlockWidgetComponent } from "./encounter/encounter-block-widget-component";
@@ -88,8 +89,17 @@ export default class EncounterCastPlugin extends Plugin {
 					onMoveCombatant: (combatantId, direction) => {
 						this.reorderCombatant(combatantId, direction);
 					},
+					onMoveCombatantToIndex: (combatantId, targetIndex) => {
+						this.reorderCombatantToIndex(combatantId, targetIndex);
+					},
 					onSetHp: (combatantId, value) => {
 						this.updateCombatantHp(combatantId, value);
+					},
+					onSetHpMax: (combatantId, value) => {
+						this.updateCombatantHpMax(combatantId, value);
+					},
+					onSetTempHp: (combatantId, value) => {
+						this.updateCombatantTempHp(combatantId, value);
 					},
 					onSetAc: (combatantId, value) => {
 						this.updateCombatantAc(combatantId, value);
@@ -486,6 +496,10 @@ export default class EncounterCastPlugin extends Plugin {
 			max_hp: null,
 			ac: null,
 			dex_mod: null,
+			damage_vulnerabilities: [],
+			damage_resistances: [],
+			damage_immunities: [],
+			condition_immunities: [],
 			source: null,
 			slug: slug || "unknown",
 		};
@@ -614,6 +628,13 @@ export default class EncounterCastPlugin extends Plugin {
 		}
 
 		const targetIndex = direction === "up" ? index - 1 : index + 1;
+		this.reorderCombatantToIndex(combatantId, targetIndex);
+	}
+
+	private reorderCombatantToIndex(combatantId: string, targetIndex: number): void {
+		if (!this.currentSession) {
+			return;
+		}
 		this.updateSession(moveCombatant(this.currentSession, combatantId, targetIndex));
 	}
 
@@ -626,6 +647,28 @@ export default class EncounterCastPlugin extends Plugin {
 			return;
 		}
 		this.updateSession(setCombatantHp(this.currentSession, combatantId, parsed));
+	}
+
+	private updateCombatantHpMax(combatantId: string, value: string): void {
+		if (!this.currentSession) {
+			return;
+		}
+		const parsed = this.parseNumberInput(value);
+		if (parsed === undefined) {
+			return;
+		}
+		this.updateSession(setCombatantHpMax(this.currentSession, combatantId, parsed));
+	}
+
+	private updateCombatantTempHp(combatantId: string, value: string): void {
+		if (!this.currentSession) {
+			return;
+		}
+		const parsed = this.parseNumberInput(value);
+		if (parsed === undefined) {
+			return;
+		}
+		this.updateSession(setCombatantTempHp(this.currentSession, combatantId, parsed ?? 0));
 	}
 
 	private updateCombatantAc(combatantId: string, value: string): void {
@@ -648,11 +691,7 @@ export default class EncounterCastPlugin extends Plugin {
 			return;
 		}
 
-		let nextSession = setCombatantDexMod(this.currentSession, combatantId, parsed);
-		if (this.encounterRunning && parsed !== null) {
-			nextSession = rollCombatantInitiative(nextSession, combatantId);
-		}
-		this.updateSession(nextSession);
+		this.updateSession(setCombatantDexMod(this.currentSession, combatantId, parsed));
 	}
 
 	private parseNumberInput(value: string): number | null | undefined {
@@ -762,6 +801,8 @@ export default class EncounterCastPlugin extends Plugin {
 		this.monsterManager.scheduleHideCreatureHoverPreview(500);
 	}
 }
+
+
 
 
 

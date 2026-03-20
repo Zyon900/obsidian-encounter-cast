@@ -7,6 +7,10 @@ export interface MonsterRecord {
 	max_hp: number | null;
 	ac: number | null;
 	dex_mod: number | null;
+	damage_vulnerabilities: string[];
+	damage_resistances: string[];
+	damage_immunities: string[];
+	condition_immunities: string[];
 	source: string | null;
 	slug: string;
 	raw?: unknown;
