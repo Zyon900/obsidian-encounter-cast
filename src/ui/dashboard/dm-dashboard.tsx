@@ -562,7 +562,7 @@ function CombatantRow({
 							type="number"
 							value={combatant.hpCurrent ?? ""}
 							placeholder="-"
-							onInput={(event) => actions.onSetHp(combatant.id, (event.currentTarget as HTMLInputElement).value)}
+							onInput={(event) => actions.onSetHp(combatant.id, event.currentTarget.value)}
 						/>
 					</label>
 					<label>
@@ -571,7 +571,7 @@ function CombatantRow({
 							type="number"
 							value={combatant.hpMax ?? ""}
 							placeholder="-"
-							onInput={(event) => actions.onSetHpMax(combatant.id, (event.currentTarget as HTMLInputElement).value)}
+							onInput={(event) => actions.onSetHpMax(combatant.id, event.currentTarget.value)}
 						/>
 					</label>
 					<label>
@@ -580,7 +580,7 @@ function CombatantRow({
 							type="number"
 							value={combatant.tempHp}
 							placeholder="0"
-							onInput={(event) => actions.onSetTempHp(combatant.id, (event.currentTarget as HTMLInputElement).value)}
+							onInput={(event) => actions.onSetTempHp(combatant.id, event.currentTarget.value)}
 						/>
 					</label>
 				</div>
@@ -624,6 +624,7 @@ function MonsterInfoButton({ onClick }: { onClick: () => void }) {
 		</button>
 	);
 }
+
 
 
 

@@ -26,7 +26,7 @@ export class DmDashboardView extends ItemView {
 	}
 
 	getDisplayText(): string {
-		return "EncounterCast";
+		return "Encounter cast";
 	}
 
 	getIcon(): string {
@@ -53,4 +53,5 @@ export class DmDashboardView extends ItemView {
 		render(<DmDashboard model={this.model} actions={this.actions} />, this.contentEl);
 	}
 }
+
 

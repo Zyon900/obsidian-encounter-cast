@@ -22,7 +22,7 @@ export class PartySettingsModal extends Modal {
 		this.contentEl.empty();
 
 		new Setting(this.contentEl).setName("Party members").addText((text) => {
-			text.setPlaceholder("e.g. 4");
+			text.setPlaceholder("Example: 4");
 			text.setValue(this.partyMembersValue);
 			text.inputEl.type = "number";
 			text.inputEl.min = "1";
@@ -84,3 +84,4 @@ function parseOptionalInt(value: string): number | null {
 	const parsed = Number.parseInt(trimmed, 10);
 	return Number.isFinite(parsed) ? parsed : null;
 }
+

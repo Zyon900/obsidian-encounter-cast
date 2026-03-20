@@ -93,10 +93,7 @@ export class FantasyStatblocksAdapter {
 		this.clearHoverHideTimeout();
 		this.hideCreatureHoverPreview();
 		this.hoverContainer.empty();
-		this.hoverContainer.style.display = "block";
-		this.hoverContainer.style.width = "min(460px, calc(100vw - 24px))";
-		this.hoverContainer.style.maxWidth = "calc(100vw - 24px)";
-		this.hoverContainer.style.maxHeight = "calc(100vh - 24px)";
+        this.hoverContainer.addClass("is-visible");
 		this.hoverComponent = api.render(creatureToRender, this.hoverContainer);
 
 		// Reposition multiple times to account for late layout growth while the
@@ -117,7 +114,7 @@ export class FantasyStatblocksAdapter {
 		this.hoverComponent?.unload();
 		this.hoverComponent = null;
 		if (this.hoverContainer) {
-			this.hoverContainer.style.display = "none";
+            this.hoverContainer.removeClass("is-visible");
 			this.hoverContainer.empty();
 		}
 	}
@@ -157,7 +154,6 @@ export class FantasyStatblocksAdapter {
 
 		const container = document.createElement("div");
 		container.className = "encounter-cast-hover-preview popover";
-		container.style.display = "none";
 		container.addEventListener("mouseenter", () => {
 			this.clearHoverHideTimeout();
 		});
@@ -260,3 +256,4 @@ export class FantasyStatblocksAdapter {
 		this.hoverHideTimeout = null;
 	}
 }
+

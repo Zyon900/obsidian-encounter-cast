@@ -30,7 +30,7 @@ import type { DashboardViewModel } from "./ui/dashboard/types";
 import { PreactMount } from "./ui/preact-mount";
 import { CleanupRegistry } from "./utils/cleanup-registry";
 
-interface EncounterCastSettings extends EncounterPartySettings {}
+type EncounterCastSettings = EncounterPartySettings;
 
 const DEFAULT_SETTINGS: EncounterCastSettings = {
 	partyMembers: null,
@@ -50,7 +50,8 @@ export default class EncounterCastPlugin extends Plugin {
 	private readonly encounterWidgetComponents = new Set<EncounterBlockWidgetComponent>();
 
 	async onload(): Promise<void> {
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+		const loadedSettings: unknown = await this.loadData();
+		this.settings = mergeSettings(loadedSettings);
 		this.statusBarRoot = this.addStatusBarItem();
 		this.statusBarRoot.addClass("encounter-cast-status-root");
 		this.preactMount = new PreactMount(this.statusBarRoot);
@@ -135,7 +136,7 @@ export default class EncounterCastPlugin extends Plugin {
 		});
 		this.addCommand({
 			id: "open-dm-dashboard",
-			name: "Open DM dashboard",
+			name: "Open dashboard",
 			callback: async () => {
 				await this.openDashboardView();
 			},
@@ -236,7 +237,6 @@ export default class EncounterCastPlugin extends Plugin {
 
 	onunload(): void {
 		void this.encounterServer.stop();
-		this.app.workspace.detachLeavesOfType(DM_DASHBOARD_VIEW_TYPE);
 		this.encounterWidgetComponents.clear();
 		this.monsterManager.hideCreatureHoverPreview();
 		this.preactMount?.unmount();
@@ -802,15 +802,14 @@ export default class EncounterCastPlugin extends Plugin {
 	}
 }
 
+function mergeSettings(value: unknown): EncounterCastSettings {
+	if (!value || typeof value !== "object") {
+		return { ...DEFAULT_SETTINGS };
+	}
 
-
-
-
-
-
-
-
-
-
-
-
+	const candidate = value as Partial<EncounterPartySettings>;
+	return {
+		partyMembers: Number.isInteger(candidate.partyMembers) ? candidate.partyMembers ?? null : null,
+		partyLevel: Number.isInteger(candidate.partyLevel) ? candidate.partyLevel ?? null : null,
+	};
+}

@@ -17,7 +17,7 @@ export class CustomMonsterModal extends Modal {
 		this.contentEl.empty();
 
 		new Setting(this.contentEl).setName("Name").addText((text) => {
-			text.setPlaceholder("e.g. Fire Cultist");
+			text.setPlaceholder("Example: fire cultist");
 			text.setValue(this.nameValue);
 			text.onChange((value) => {
 				this.nameValue = value;
@@ -58,4 +58,5 @@ export class CustomMonsterModal extends Modal {
 		this.onSubmit(name);
 	}
 }
+
 

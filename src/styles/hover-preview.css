@@ -1,12 +1,18 @@
 .encounter-cast-hover-preview {
+	display: none;
+	width: min(460px, calc(100vw - 24px));
+	max-width: calc(100vw - 24px);
+	max-height: calc(100vh - 24px);
 	position: absolute;
 	z-index: var(--layer-popover);
-	max-width: min(460px, calc(100vw - 24px));
-	max-height: min(70vh, 720px);
 	overflow: auto;
 	padding: 6px;
 	background: var(--background-primary);
 	border: 1px solid var(--background-modifier-border);
 	border-radius: 10px;
 	box-shadow: var(--shadow-s);
+}
+
+.encounter-cast-hover-preview.is-visible {
+	display: block;
 }
