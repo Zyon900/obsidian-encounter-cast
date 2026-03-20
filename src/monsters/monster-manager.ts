@@ -125,6 +125,11 @@ export class MonsterManager {
 		return hits.slice(0, SEARCH_RESULT_LIMIT);
 	}
 
+	getAllMonsters(): MonsterRecord[] {
+		this.loadCacheIfNeeded();
+		return [...this.cachedMonsters].sort((left, right) => left.name.localeCompare(right.name));
+	}
+
 	async openCreaturePreview(monster: MonsterRecord): Promise<void> {
 		await this.adapter.openCreaturePreview(monster);
 	}
@@ -192,26 +197,51 @@ export class MonsterManager {
 			name,
 			challenge: this.readChallenge(record.cr),
 			xp: this.readXp(record),
-			hp: this.readNumber(record.hp),
+			hp: this.readHpValue(record.hp),
+			max_hp: this.readNumber(record.max_hp) ?? this.readNumber(record.hpMax) ?? this.readHpValue(record.hp),
 			ac: this.readNumber(record.ac),
-			dex: this.readDex(record),
+			dex_mod: this.readDexMod(record),
 			source: source ?? null,
 			slug,
 			raw: rawMonster,
 		};
 	}
 
-	private readDex(record: Record<string, unknown>): number | null {
+	private readDexMod(record: Record<string, unknown>): number | null {
+		const directMod = this.readNumber(record.dex_mod) ?? this.readNumber(record.dexMod);
+		if (directMod !== null) {
+			return directMod;
+		}
+
 		const directDex = this.readNumber(record.dex);
 		if (directDex !== null) {
-			return directDex;
+			return this.dexScoreToMod(directDex);
 		}
 
 		if (!Array.isArray(record.stats) || record.stats.length < 2) {
 			return null;
 		}
 
-		return this.readNumber(record.stats[1]);
+		const statDex = this.readNumber(record.stats[1]);
+		return statDex === null ? null : this.dexScoreToMod(statDex);
+	}
+
+	private dexScoreToMod(score: number): number {
+		return Math.floor((score - 10) / 2);
+	}
+
+	private readHpValue(value: unknown): number | null {
+		const direct = this.readNumber(value);
+		if (direct !== null) {
+			return direct;
+		}
+
+		if (value && typeof value === "object") {
+			const record = value as Record<string, unknown>;
+			return this.readNumber(record.average) ?? this.readNumber(record.value) ?? this.readNumber(record.max);
+		}
+
+		return null;
 	}
 
 	private readString(value: unknown): string | null {
@@ -324,3 +354,6 @@ export class MonsterManager {
 			.replace(/(^-|-$)/g, "");
 	}
 }
+
+
+

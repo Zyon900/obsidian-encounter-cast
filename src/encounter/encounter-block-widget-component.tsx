@@ -15,7 +15,7 @@ interface EncounterBlockWidgetComponentProps {
 	onTitleChange: (rows: EncounterPreviewRow[], title: string | null) => void;
 	onRunEncounter: (rows: EncounterPreviewRow[], title: string | null) => void;
 	onAddToEncounter: (rows: EncounterPreviewRow[], title: string | null) => void;
-	onOpenPartySettings: () => void;
+	onSelectMonsterForCodeblock: () => Promise<string | null>;
 	onDispose?: () => void;
 }
 
@@ -54,9 +54,10 @@ export class EncounterBlockWidgetComponent extends MarkdownRenderChild {
 				onTitleChange={this.props.onTitleChange}
 				onRunEncounter={this.props.onRunEncounter}
 				onAddToEncounter={this.props.onAddToEncounter}
-				onOpenPartySettings={this.props.onOpenPartySettings}
+				onSelectMonsterForCodeblock={this.props.onSelectMonsterForCodeblock}
 			/>,
 			this.containerEl,
 		);
 	}
 }
+

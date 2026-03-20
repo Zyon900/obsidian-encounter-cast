@@ -58,7 +58,7 @@ export class EncounterSuggest extends EditorSuggest<MonsterSearchHit> {
 		content.createDiv({ cls: "suggestion-title", text: value.monster.name });
 		const details = [
 			value.monster.challenge ? `CR ${value.monster.challenge}` : "CR -",
-			value.monster.hp !== null ? `HP ${value.monster.hp}` : "HP -",
+			value.monster.max_hp !== null ? `HP ${value.monster.max_hp}` : "HP -",
 			value.monster.ac !== null ? `AC ${value.monster.ac}` : "AC -",
 		].join(" | ");
 		content.createDiv({ cls: "suggestion-note", text: details });
@@ -132,3 +132,5 @@ export class EncounterSuggest extends EditorSuggest<MonsterSearchHit> {
 		return inEncounterFence;
 	}
 }
+
+

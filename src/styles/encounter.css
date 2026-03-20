@@ -41,6 +41,20 @@
 	line-height: 1;
 }
 
+.encounter-cast-encounter-action-icon {
+	display: inline-flex;
+	width: 16px;
+	height: 16px;
+	align-items: center;
+	justify-content: center;
+	vertical-align: middle;
+}
+
+.encounter-cast-encounter-action-icon.is-play {
+	width: 15px;
+	height: 15px;
+}
+
 .encounter-cast-encounter-actions-right {
 	display: flex;
 	align-items: center;
@@ -77,18 +91,6 @@
 .encounter-cast-encounter-difficulty.is-high {
 	color: var(--text-error);
 	background: color-mix(in srgb, var(--color-red) 22%, transparent);
-}
-
-.encounter-cast-encounter-settings {
-	position: relative;
-}
-
-.encounter-cast-encounter-settings-trigger {
-	width: 28px;
-	min-width: 28px;
-	padding: 0;
-	font-size: 11px;
-	line-height: 1;
 }
 
 .encounter-cast-encounter-rows {

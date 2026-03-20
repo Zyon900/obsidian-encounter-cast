@@ -4,8 +4,11 @@ import {
 	advanceCombatTurn,
 	createCombatSession,
 	moveCombatant,
+	rollCombatantInitiative,
+	rollMonsterInitiative,
 	setActiveCombatant,
 	setCombatantAc,
+	setCombatantDexMod,
 	setCombatantHp,
 	type CombatSession,
 } from "./encounter/combat-session";
@@ -13,13 +16,14 @@ import { EncounterBlockWidgetComponent } from "./encounter/encounter-block-widge
 import { createEncounterEditorKeymap } from "./encounter/encounter-editor-keymap";
 import type { EncounterPartySettings } from "./encounter/encounter-difficulty";
 import { parseEncounterBlock, summarizeEncounterSource } from "./encounter/encounter-parser";
-import { resolveEncounterEntries, type ResolveEncounterResult } from "./encounter/encounter-resolver";
+import { resolveEncounterEntries, type ResolveEncounterResult, type ResolvedEncounterEntry } from "./encounter/encounter-resolver";
 import { EncounterSuggest } from "./encounter/encounter-suggest";
 import type { MonsterRecord } from "./monsters/types";
 import { MonsterManager } from "./monsters/monster-manager";
 import { EncounterServer } from "./network/encounter-server";
 import type { EncounterPreviewRow } from "./ui/encounter/encounter-block-widget";
 import { PartySettingsModal } from "./ui/encounter/party-settings-modal";
+import { pickMonsterNameOrCustom, pickMonsterOrCustom } from "./ui/dashboard/add-monster-picker";
 import { DmDashboardView, DM_DASHBOARD_VIEW_TYPE } from "./ui/dashboard/dm-dashboard-view";
 import type { DashboardViewModel } from "./ui/dashboard/types";
 import { PreactMount } from "./ui/preact-mount";
@@ -39,6 +43,7 @@ export default class EncounterCastPlugin extends Plugin {
 	private preactMount: PreactMount | null = null;
 	private statusBarRoot: HTMLElement | null = null;
 	private currentSession: CombatSession | null = null;
+	private encounterRunning = false;
 	private sourceWriteQueue = Promise.resolve();
 	private settings: EncounterCastSettings = { ...DEFAULT_SETTINGS };
 	private readonly encounterWidgetComponents = new Set<EncounterBlockWidgetComponent>();
@@ -53,6 +58,12 @@ export default class EncounterCastPlugin extends Plugin {
 			DM_DASHBOARD_VIEW_TYPE,
 			(leaf) =>
 				new DmDashboardView(leaf, {
+					onStartEncounter: () => {
+						this.startEncounterFromDashboard();
+					},
+					onStopEncounter: () => {
+						this.stopEncounterFromDashboard();
+					},
 					onStartServer: () => {
 						void this.startEncounterServer();
 					},
@@ -65,6 +76,9 @@ export default class EncounterCastPlugin extends Plugin {
 					onNextTurn: () => {
 						this.advanceTurn();
 					},
+					onAddMonster: () => {
+						this.openAddMonsterModal();
+					},
 					onActivateCombatant: (combatantId) => {
 						this.activateCombatant(combatantId);
 					},
@@ -76,6 +90,9 @@ export default class EncounterCastPlugin extends Plugin {
 					},
 					onSetAc: (combatantId, value) => {
 						this.updateCombatantAc(combatantId, value);
+					},
+					onSetDexMod: (combatantId, value) => {
+						this.updateCombatantDexMod(combatantId, value);
 					},
 					onOpenMonster: (monster) => {
 						void this.openMonsterInfo(monster);
@@ -120,6 +137,7 @@ export default class EncounterCastPlugin extends Plugin {
 
 		this.registerMarkdownCodeBlockProcessor("encounter", (source, el, ctx) => {
 			el.empty();
+			const initialSectionInfo = ctx.getSectionInfo(el);
 			const summary = summarizeEncounterSource(source);
 			const parseResult = parseEncounterBlock(source);
 			const resolvedResult = resolveEncounterEntries(parseResult.entries, this.monsterManager);
@@ -171,10 +189,10 @@ export default class EncounterCastPlugin extends Plugin {
 					this.closeMonsterHoverInfo();
 				},
 				onRowsChange: (nextRows, nextTitle) => {
-					void this.persistEncounterRows(ctx, el, nextTitle, nextRows);
+					void this.persistEncounterRows(ctx, el, nextTitle, nextRows, initialSectionInfo);
 				},
 				onTitleChange: (nextRows, nextTitle) => {
-					void this.persistEncounterRows(ctx, el, nextTitle, nextRows);
+					void this.persistEncounterRows(ctx, el, nextTitle, nextRows, initialSectionInfo);
 				},
 				onRunEncounter: (nextRows, nextTitle) => {
 					void this.handleEncounterAction(this.serializeEncounterBody(nextTitle, nextRows), "run");
@@ -182,9 +200,7 @@ export default class EncounterCastPlugin extends Plugin {
 				onAddToEncounter: (nextRows, nextTitle) => {
 					void this.handleEncounterAction(this.serializeEncounterBody(nextTitle, nextRows), "add");
 				},
-				onOpenPartySettings: () => {
-					this.openPartySettingsModal();
-				},
+				onSelectMonsterForCodeblock: async () => pickMonsterNameOrCustom(this.app, this.monsterManager),
 				onDispose: () => {
 					this.encounterWidgetComponents.delete(component);
 				},
@@ -242,6 +258,7 @@ export default class EncounterCastPlugin extends Plugin {
 		const serverState = this.encounterServer.getState();
 		return {
 			session: this.currentSession,
+			encounterRunning: this.encounterRunning,
 			serverRunning: serverState.running,
 			serverPort: serverState.port,
 			roomToken: serverState.roomToken,
@@ -269,18 +286,39 @@ export default class EncounterCastPlugin extends Plugin {
 
 		const totalCreatures = prepared.resolvedResult.resolved.reduce((sum, item) => sum + item.entry.quantity, 0);
 		if (mode === "run") {
-			this.updateSession(createCombatSession(prepared.parseResult.title, prepared.resolvedResult.resolved));
+			const players = this.getPlayerCombatants();
+			const baseSession: CombatSession = this.currentSession
+				? {
+						...this.currentSession,
+						title: prepared.parseResult.title,
+						round: 1,
+						activeIndex: 0,
+						combatants: players,
+						updatedAt: new Date().toISOString(),
+					}
+				: createCombatSession(prepared.parseResult.title, []);
+			const nextSession = addCombatantsToSession(baseSession, prepared.parseResult.title, prepared.resolvedResult.resolved, {
+				rollInitiative: true,
+				insertByInitiative: true,
+			});
+			this.updateSession(nextSession);
+			this.encounterRunning = true;
+			this.renderDashboardView();
 			await this.openDashboardView();
-			new Notice(`Encounter started. ${totalCreatures} creatures added to the dashboard.`);
+			new Notice(`Encounter started. ${totalCreatures} monsters loaded.`);
 			return;
 		}
 
 		const nextSession = this.currentSession
-			? addCombatantsToSession(this.currentSession, prepared.parseResult.title, prepared.resolvedResult.resolved)
+			? addCombatantsToSession(this.currentSession, prepared.parseResult.title, prepared.resolvedResult.resolved, {
+					rollInitiative: this.encounterRunning,
+					insertByInitiative: this.encounterRunning,
+				})
 			: createCombatSession(prepared.parseResult.title, prepared.resolvedResult.resolved);
 		this.updateSession(nextSession);
+		this.renderDashboardView();
 		await this.openDashboardView();
-		new Notice(`Encounter updated. ${totalCreatures} creatures added to active combat.`);
+		new Notice(`Encounter updated. ${totalCreatures} monsters added.`);
 	}
 
 	private async persistEncounterRows(
@@ -288,13 +326,14 @@ export default class EncounterCastPlugin extends Plugin {
 		sectionEl: HTMLElement,
 		title: string | null,
 		rows: EncounterPreviewRow[],
+		sectionInfoHint?: MarkdownSectionInformation | null,
 	): Promise<void> {
 		const file = this.app.vault.getAbstractFileByPath(ctx.sourcePath);
 		if (!(file instanceof TFile)) {
 			return;
 		}
 
-		const sectionInfo = ctx.getSectionInfo(sectionEl);
+		const sectionInfo = ctx.getSectionInfo(sectionEl) ?? sectionInfoHint ?? null;
 		if (!sectionInfo) {
 			return;
 		}
@@ -406,27 +445,121 @@ export default class EncounterCastPlugin extends Plugin {
 
 		const resolvedResult = resolveEncounterEntries(parseResult.entries, this.monsterManager);
 		if (resolvedResult.unresolved.length > 0) {
+			const fallbackEntries = resolvedResult.unresolved.map((entry) => ({
+				entry,
+				monster: this.createUnresolvedMonsterRecord(entry.monsterQuery),
+			}));
 			for (const unresolved of resolvedResult.unresolved.slice(0, 4)) {
-				new Notice(`Line ${unresolved.line}: Could not resolve "${unresolved.monsterQuery}".`);
+				new Notice(`Line ${unresolved.line}: Added unresolved "${unresolved.monsterQuery}" with empty stats.`);
 			}
 			if (resolvedResult.unresolved.length > 4) {
-				new Notice(`${resolvedResult.unresolved.length - 4} more unresolved encounter rows.`);
+				new Notice(`${resolvedResult.unresolved.length - 4} more unresolved encounter rows added with empty stats.`);
 			}
-			return null;
+			return {
+				parseResult,
+				resolvedResult: {
+					resolved: resolvedResult.resolved.concat(fallbackEntries),
+					unresolved: [],
+				},
+			};
 		}
 
 		return { parseResult, resolvedResult };
 	}
 
+	private createUnresolvedMonsterRecord(name: string): MonsterRecord {
+		const safeName = name.trim() || "Unknown creature";
+		const slug = safeName
+			.toLowerCase()
+			.replace(/[^a-z0-9]+/g, "-")
+			.replace(/(^-|-$)/g, "");
+
+		return {
+			id: `unresolved::${slug || "unknown"}`,
+			name: safeName,
+			challenge: null,
+			xp: null,
+			hp: null,
+			max_hp: null,
+			ac: null,
+			dex_mod: null,
+			source: null,
+			slug: slug || "unknown",
+		};
+	}
+
 	private updateSession(session: CombatSession | null): void {
 		this.currentSession = session;
+		if (!session) {
+			this.encounterRunning = false;
+		}
 		this.encounterServer.setSession(session);
 		this.renderFoundationView();
 		this.renderDashboardView();
 	}
 
-	private advanceTurn(): void {
+	private getPlayerCombatants(): CombatSession["combatants"] {
 		if (!this.currentSession) {
+			return [];
+		}
+
+		return this.currentSession.combatants.filter((combatant) => combatant.isPlayer === true);
+	}
+
+	private startEncounterFromDashboard(): void {
+		if (!this.currentSession) {
+			new Notice("No encounter available to run.");
+			return;
+		}
+
+		this.currentSession = rollMonsterInitiative(this.currentSession);
+		this.encounterRunning = true;
+		this.updateSession(this.currentSession);
+		new Notice("Encounter running.");
+	}
+
+	private stopEncounterFromDashboard(): void {
+		if (!this.currentSession || !this.encounterRunning) {
+			return;
+		}
+
+		this.encounterRunning = false;
+		this.renderDashboardView();
+		new Notice("Encounter paused.");
+	}
+
+	private openAddMonsterModal(): void {
+		void pickMonsterOrCustom(this.app, this.monsterManager).then((selection) => {
+			if (!selection) {
+				return;
+			}
+
+			this.addMonsterToSession(selection.monster ?? this.createUnresolvedMonsterRecord(selection.monsterName));
+		});
+	}
+
+	private addMonsterToSession(monster: MonsterRecord): void {
+		const session = this.currentSession ?? createCombatSession("Current encounter", []);
+		const resolved: ResolvedEncounterEntry = {
+			entry: {
+				line: session.combatants.length + 1,
+				quantity: 1,
+				monsterQuery: monster.name,
+				customName: null,
+			},
+			monster,
+		};
+
+		const nextSession = addCombatantsToSession(session, session.title, [resolved], {
+			rollInitiative: this.encounterRunning,
+			insertByInitiative: this.encounterRunning,
+		});
+		this.updateSession(nextSession);
+		new Notice(`${monster.name} added to encounter.`);
+	}
+
+	private advanceTurn(): void {
+		if (!this.currentSession || !this.encounterRunning) {
 			return;
 		}
 		this.updateSession(advanceCombatTurn(this.currentSession));
@@ -473,6 +606,22 @@ export default class EncounterCastPlugin extends Plugin {
 			return;
 		}
 		this.updateSession(setCombatantAc(this.currentSession, combatantId, parsed));
+	}
+
+	private updateCombatantDexMod(combatantId: string, value: string): void {
+		if (!this.currentSession) {
+			return;
+		}
+		const parsed = this.parseNumberInput(value);
+		if (parsed === undefined) {
+			return;
+		}
+
+		let nextSession = setCombatantDexMod(this.currentSession, combatantId, parsed);
+		if (this.encounterRunning && parsed !== null) {
+			nextSession = rollCombatantInitiative(nextSession, combatantId);
+		}
+		this.updateSession(nextSession);
 	}
 
 	private parseNumberInput(value: string): number | null | undefined {
@@ -582,4 +731,9 @@ export default class EncounterCastPlugin extends Plugin {
 		this.monsterManager.scheduleHideCreatureHoverPreview(500);
 	}
 }
+
+
+
+
+
 

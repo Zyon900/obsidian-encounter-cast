@@ -4,8 +4,9 @@ export interface MonsterRecord {
 	challenge: string | null;
 	xp: number | null;
 	hp: number | null;
+	max_hp: number | null;
 	ac: number | null;
-	dex: number | null;
+	dex_mod: number | null;
 	source: string | null;
 	slug: string;
 	raw?: unknown;

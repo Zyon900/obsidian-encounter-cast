@@ -1,3 +1,4 @@
+import { setIcon } from "obsidian";
 import { useEffect, useRef, useState } from "preact/hooks";
 import {
 	computeEncounterDifficulty,
@@ -30,7 +31,7 @@ interface EncounterBlockWidgetProps {
 	onTitleChange: (rows: EncounterPreviewRow[], title: string | null) => void;
 	onRunEncounter: (rows: EncounterPreviewRow[], title: string | null) => void;
 	onAddToEncounter: (rows: EncounterPreviewRow[], title: string | null) => void;
-	onOpenPartySettings: () => void;
+	onSelectMonsterForCodeblock: () => Promise<string | null>;
 }
 
 // Renders the interactive preview for an `encounter` codeblock.
@@ -96,6 +97,33 @@ export function EncounterBlockWidget(props: EncounterBlockWidgetProps) {
 			return updated;
 		});
 	};
+
+	const addMonsterRow = async () => {
+		const selectedName = await props.onSelectMonsterForCodeblock();
+		if (!selectedName) {
+			return;
+		}
+
+		setRows((currentRows) => {
+			const timestamp = Date.now();
+			const suffix = Math.random().toString(36).slice(2, 8);
+			const row: EncounterPreviewRow = {
+				id: `unresolved-manual-${timestamp}-${suffix}`,
+				quantity: 1,
+				customName: null,
+				monsterQuery: selectedName,
+				monsterName: selectedName,
+				resolved: false,
+				challenge: null,
+				xp: null,
+				monster: null,
+			};
+			const updated = currentRows.concat(row);
+			props.onRowsChange(updated, title);
+			return updated;
+		});
+	};
+
 	const totalXp = computeEncounterTotalXp(rows);
 	const difficulty = computeEncounterDifficulty(totalXp, props.partySettings);
 	const difficultyLabel = difficulty ? difficulty.charAt(0).toUpperCase() + difficulty.slice(1) : null;
@@ -234,7 +262,7 @@ export function EncounterBlockWidget(props: EncounterBlockWidgetProps) {
 						title="Run encounter"
 						onClick={() => props.onRunEncounter(rows, title)}
 					>
-						▶
+						<EncounterActionIcon name="play" />
 					</button>
 					<button
 						type="button"
@@ -242,7 +270,17 @@ export function EncounterBlockWidget(props: EncounterBlockWidgetProps) {
 						title="Add to encounter"
 						onClick={() => props.onAddToEncounter(rows, title)}
 					>
-						✚
+						<EncounterActionIcon name="plus" />
+					</button>
+					<button
+						type="button"
+						aria-label="Add monster to codeblock"
+						title="Add monster to codeblock"
+						onClick={() => {
+							void addMonsterRow();
+						}}
+					>
+						<EncounterActionIcon name="skull" />
 					</button>
 				</div>
 				<div className="encounter-cast-encounter-actions-right">
@@ -253,18 +291,23 @@ export function EncounterBlockWidget(props: EncounterBlockWidgetProps) {
 					) : (
 						<span className="encounter-cast-encounter-xp">{totalXp}xp</span>
 					)}
-					<div className="encounter-cast-encounter-settings">
-						<button
-							type="button"
-							className="encounter-cast-encounter-settings-trigger"
-							aria-label="Encounter settings"
-							onClick={props.onOpenPartySettings}
-						>
-							⚙
-						</button>
-					</div>
 				</div>
 			</div>
 		</div>
 	);
 }
+
+function EncounterActionIcon({ name }: { name: string }) {
+	const iconRef = useRef<HTMLSpanElement | null>(null);
+
+	useEffect(() => {
+		if (!iconRef.current) {
+			return;
+		}
+		setIcon(iconRef.current, name);
+	}, [name]);
+
+	const className = `encounter-cast-encounter-action-icon${name === "play" ? " is-play" : ""}`;
+	return <span ref={iconRef} className={className} aria-hidden="true" />;
+}
+

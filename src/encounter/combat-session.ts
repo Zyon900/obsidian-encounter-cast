@@ -5,12 +5,15 @@ export interface Combatant {
 	id: string;
 	name: string;
 	monsterName: string;
+	isPlayer?: boolean;
 	challenge: string | null;
 	hpCurrent: number | null;
 	hpMax: number | null;
 	ac: number | null;
-	dex: number | null;
+	dexMod: number | null;
 	initiative: number | null;
+	initiativeRoll: number | null;
+	initiativeCriticalFailure: boolean;
 	monster: MonsterRecord;
 }
 
@@ -24,14 +27,26 @@ export interface CombatSession {
 	updatedAt: string;
 }
 
-export function createCombatSession(title: string | null, entries: ResolvedEncounterEntry[]): CombatSession {
+interface AddCombatantsOptions {
+	rollInitiative?: boolean;
+	insertByInitiative?: boolean;
+}
+
+export function createCombatSession(
+	title: string | null,
+	entries: ResolvedEncounterEntry[],
+	options: AddCombatantsOptions = {},
+): CombatSession {
 	const createdAt = new Date().toISOString();
+	const rollInitiative = options.rollInitiative ?? false;
+	const combatants = expandCombatants(entries, [], { rollInitiative });
+	const ordered = rollInitiative ? sortCombatantsByInitiative(combatants) : combatants;
 	return {
 		id: `session-${Date.now().toString(36)}`,
 		title,
 		round: 1,
 		activeIndex: 0,
-		combatants: expandCombatants(entries),
+		combatants: ordered,
 		createdAt,
 		updatedAt: createdAt,
 	};
@@ -41,11 +56,53 @@ export function addCombatantsToSession(
 	session: CombatSession,
 	title: string | null,
 	entries: ResolvedEncounterEntry[],
+	options: AddCombatantsOptions = {},
 ): CombatSession {
-	const combatants = session.combatants.concat(expandCombatants(entries, session.combatants));
+	const rollInitiative = options.rollInitiative ?? false;
+	const insertByInitiative = options.insertByInitiative ?? false;
+	const additions = expandCombatants(entries, session.combatants, { rollInitiative });
+	if (additions.length === 0) {
+		return session;
+	}
+
+	const combatants = insertByInitiative
+		? sortCombatantsByInitiative(session.combatants.concat(additions))
+		: session.combatants.concat(additions);
+	const activeId = session.combatants[session.activeIndex]?.id ?? null;
+	const activeIndex = activeId ? Math.max(0, combatants.findIndex((combatant) => combatant.id === activeId)) : 0;
 	return stamp({
 		...session,
 		title: session.title ?? title,
+		activeIndex,
+		combatants,
+	});
+}
+
+export function rollMonsterInitiative(session: CombatSession): CombatSession {
+	if (session.combatants.length === 0) {
+		return session;
+	}
+
+	const activeId = session.combatants[session.activeIndex]?.id ?? null;
+	const rerolled = session.combatants.map((combatant) => {
+		if (combatant.isPlayer) {
+			return combatant;
+		}
+
+		const roll = rollInitiativeForMonster(combatant.dexMod);
+		return {
+			...combatant,
+			initiative: roll.total,
+			initiativeRoll: roll.roll,
+			initiativeCriticalFailure: roll.isCriticalFailure,
+		};
+	});
+
+	const combatants = sortCombatantsByInitiative(rerolled);
+	const activeIndex = activeId ? Math.max(0, combatants.findIndex((combatant) => combatant.id === activeId)) : 0;
+	return stamp({
+		...session,
+		activeIndex,
 		combatants,
 	});
 }
@@ -112,6 +169,13 @@ export function setCombatantAc(session: CombatSession, combatantId: string, ac: 
 	}));
 }
 
+export function setCombatantDexMod(session: CombatSession, combatantId: string, dexMod: number | null): CombatSession {
+	return updateCombatant(session, combatantId, (combatant) => ({
+		...combatant,
+		dexMod,
+	}));
+}
+
 export function setActiveCombatant(session: CombatSession, combatantId: string): CombatSession {
 	const nextIndex = session.combatants.findIndex((combatant) => combatant.id === combatantId);
 	if (nextIndex === -1 || nextIndex === session.activeIndex) {
@@ -121,6 +185,35 @@ export function setActiveCombatant(session: CombatSession, combatantId: string):
 	return stamp({
 		...session,
 		activeIndex: nextIndex,
+	});
+}
+
+export function rollCombatantInitiative(session: CombatSession, combatantId: string): CombatSession {
+	const sourceIndex = session.combatants.findIndex((combatant) => combatant.id === combatantId);
+	if (sourceIndex === -1) {
+		return session;
+	}
+
+	const target = session.combatants[sourceIndex];
+	if (!target) {
+		return session;
+	}
+
+	const roll = rollInitiativeForMonster(target.dexMod);
+	const combatants = session.combatants.slice();
+	combatants[sourceIndex] = {
+		...target,
+		initiative: roll.total,
+		initiativeRoll: roll.roll,
+		initiativeCriticalFailure: roll.isCriticalFailure,
+	};
+	const sorted = sortCombatantsByInitiative(combatants);
+	const activeId = session.combatants[session.activeIndex]?.id ?? null;
+	const activeIndex = activeId ? Math.max(0, sorted.findIndex((combatant) => combatant.id === activeId)) : 0;
+	return stamp({
+		...session,
+		activeIndex,
+		combatants: sorted,
 	});
 }
 
@@ -142,26 +235,35 @@ function updateCombatant(
 	return changed ? stamp({ ...session, combatants }) : session;
 }
 
-function expandCombatants(entries: ResolvedEncounterEntry[], existingCombatants: Combatant[] = []): Combatant[] {
+function expandCombatants(
+	entries: ResolvedEncounterEntry[],
+	existingCombatants: Combatant[] = [],
+	options: AddCombatantsOptions = {},
+): Combatant[] {
 	const counters = buildNameCounters(existingCombatants);
 	const combatants: Combatant[] = [];
+	const rollInitiative = options.rollInitiative ?? false;
 
 	for (const item of entries) {
 		for (let copyIndex = 0; copyIndex < item.entry.quantity; copyIndex++) {
 			const monsterName = item.monster.name;
 			const baseName = item.entry.customName ?? monsterName;
-			const displayName = item.entry.customName ? baseName : nextUnnamedMonsterLabel(monsterName, counters);
+			const displayName = nextCombatantLabel(baseName, counters);
 			const idSeed = `${item.monster.id}-${item.entry.line}-${existingCombatants.length + combatants.length + 1}`;
+			const initiativeRoll = rollInitiative ? rollInitiativeForMonster(item.monster.dex_mod) : null;
 			combatants.push({
 				id: `combatant-${idSeed}`,
 				name: displayName,
 				monsterName,
+				isPlayer: false,
 				challenge: item.monster.challenge,
-				hpCurrent: item.monster.hp,
-				hpMax: item.monster.hp,
+				hpCurrent: item.monster.hp ?? item.monster.max_hp,
+				hpMax: item.monster.max_hp ?? item.monster.hp,
 				ac: item.monster.ac,
-				dex: item.monster.dex,
-				initiative: null,
+				dexMod: item.monster.dex_mod,
+				initiative: initiativeRoll?.total ?? null,
+				initiativeRoll: initiativeRoll?.roll ?? null,
+				initiativeCriticalFailure: initiativeRoll?.isCriticalFailure ?? false,
 				monster: item.monster,
 			});
 		}
@@ -173,16 +275,23 @@ function expandCombatants(entries: ResolvedEncounterEntry[], existingCombatants:
 function buildNameCounters(existingCombatants: Combatant[]): Map<string, number> {
 	const counters = new Map<string, number>();
 	for (const combatant of existingCombatants) {
-		const current = counters.get(combatant.monsterName) ?? 0;
-		counters.set(combatant.monsterName, current + 1);
+		if (combatant.isPlayer) {
+			continue;
+		}
+
+		const parsed = parseNameSuffix(combatant.name);
+		const key = parsed.base;
+		const nextCount = parsed.suffixIndex ?? 1;
+		const current = counters.get(key) ?? 0;
+		counters.set(key, Math.max(current, nextCount));
 	}
 	return counters;
 }
 
-function nextUnnamedMonsterLabel(monsterName: string, counters: Map<string, number>): string {
-	const next = (counters.get(monsterName) ?? 0) + 1;
-	counters.set(monsterName, next);
-	return `${monsterName} ${indexToAlphaSuffix(next)}`;
+function nextCombatantLabel(baseName: string, counters: Map<string, number>): string {
+	const next = (counters.get(baseName) ?? 0) + 1;
+	counters.set(baseName, next);
+	return `${baseName} ${indexToAlphaSuffix(next)}`;
 }
 
 function indexToAlphaSuffix(index: number): string {
@@ -196,9 +305,60 @@ function indexToAlphaSuffix(index: number): string {
 	return label;
 }
 
+function parseNameSuffix(name: string): { base: string; suffixIndex: number | null } {
+	const trimmed = name.trim();
+	const match = /^(.*)\s+([A-Z]+)$/.exec(trimmed);
+	if (!match?.[1] || !match[2]) {
+		return { base: trimmed, suffixIndex: null };
+	}
+
+	const base = match[1].trim();
+	if (!base.length) {
+		return { base: trimmed, suffixIndex: null };
+	}
+
+	return { base, suffixIndex: alphaSuffixToIndex(match[2]) };
+}
+
+function alphaSuffixToIndex(suffix: string): number {
+	let value = 0;
+	for (let i = 0; i < suffix.length; i++) {
+		const code = suffix.charCodeAt(i);
+		value = value * 26 + (code - 64);
+	}
+	return value;
+}
+
 function stamp(session: CombatSession): CombatSession {
 	return {
 		...session,
 		updatedAt: new Date().toISOString(),
 	};
 }
+
+function rollInitiativeForMonster(dexMod: number | null): { roll: number; total: number; isCriticalFailure: boolean } {
+	const modifier = dexMod ?? 0;
+	const d20 = Math.floor(Math.random() * 20) + 1;
+	const total = Math.max(1, d20 + modifier);
+	return {
+		roll: d20,
+		total,
+		isCriticalFailure: d20 === 1,
+	};
+}
+
+function sortCombatantsByInitiative(combatants: Combatant[]): Combatant[] {
+	return combatants
+		.map((combatant, index) => ({ combatant, index }))
+		.sort((left, right) => {
+			const leftInit = left.combatant.initiative ?? Number.NEGATIVE_INFINITY;
+			const rightInit = right.combatant.initiative ?? Number.NEGATIVE_INFINITY;
+			if (rightInit !== leftInit) {
+				return rightInit - leftInit;
+			}
+
+			return left.index - right.index;
+		})
+		.map((item) => item.combatant);
+}
+

@@ -7,6 +7,7 @@ export const DM_DASHBOARD_VIEW_TYPE = "encounter-cast-dm-dashboard";
 
 const EMPTY_MODEL: DashboardViewModel = {
 	session: null,
+	encounterRunning: false,
 	serverRunning: false,
 	serverPort: null,
 	roomToken: null,
@@ -52,3 +53,4 @@ export class DmDashboardView extends ItemView {
 		render(<DmDashboard model={this.model} actions={this.actions} />, this.contentEl);
 	}
 }
+

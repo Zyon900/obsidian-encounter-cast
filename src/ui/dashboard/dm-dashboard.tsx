@@ -1,5 +1,6 @@
 import QRCode from "qrcode";
-import { useEffect, useState } from "preact/hooks";
+import { setIcon } from "obsidian";
+import { useEffect, useRef, useState } from "preact/hooks";
 import type { Combatant } from "../../encounter/combat-session";
 import { MonsterHoverPreviewTrigger } from "../monsters/monster-hover-preview-trigger";
 import type { DashboardActions, DashboardViewModel } from "./types";
@@ -10,8 +11,11 @@ interface DmDashboardProps {
 }
 
 export function DmDashboard({ model, actions }: DmDashboardProps) {
+	const [isQrOpen, setIsQrOpen] = useState(false);
 	const primaryInvite = model.inviteUrls[0] ?? null;
 	const session = model.session;
+	const canControlTurns = Boolean(session && model.encounterRunning && session.combatants.length > 0);
+	const hasEncounter = Boolean(session);
 
 	return (
 		<div className="encounter-cast-dashboard">
@@ -28,34 +32,6 @@ export function DmDashboard({ model, actions }: DmDashboardProps) {
 						{model.serverPort !== null ? <span>Port {model.serverPort}</span> : null}
 					</div>
 				</div>
-
-				<div className="encounter-cast-dashboard-actions">
-					{model.serverRunning ? (
-						<button type="button" onClick={actions.onStopServer}>
-							Stop server
-						</button>
-					) : (
-						<button type="button" onClick={actions.onStartServer}>
-							Start server
-						</button>
-					)}
-					<button
-						type="button"
-						onClick={() => {
-							if (primaryInvite) {
-								actions.onCopyInvite(primaryInvite);
-							}
-						}}
-						disabled={!primaryInvite}
-					>
-						Copy invite link
-					</button>
-					<button type="button" onClick={actions.onNextTurn} disabled={!session || session.combatants.length === 0}>
-						Next turn
-					</button>
-				</div>
-
-				{primaryInvite ? <InviteQrCode url={primaryInvite} /> : null}
 
 				{model.roomToken ? (
 					<div className="encounter-cast-dashboard-token">
@@ -110,11 +86,94 @@ export function DmDashboard({ model, actions }: DmDashboardProps) {
 					<div className="encounter-cast-dashboard-empty">No active combat session.</div>
 				)}
 			</section>
+
+			<div className="encounter-cast-dashboard-floating-controls" role="toolbar" aria-label="Encounter controls">
+				<IconButton
+					icon={model.encounterRunning ? "square" : "play"}
+					title={model.encounterRunning ? "Stop encounter" : "Start encounter"}
+					onClick={model.encounterRunning ? actions.onStopEncounter : actions.onStartEncounter}
+					disabled={!hasEncounter}
+				/>
+				<IconButton
+					icon="skip-forward"
+					title="Next turn"
+					onClick={actions.onNextTurn}
+					disabled={!canControlTurns}
+				/>
+				<IconButton
+					icon="skull"
+					title="Add monster"
+					onClick={actions.onAddMonster}
+					disabled={false}
+				/>
+				<IconButton
+					icon="power"
+					title={model.serverRunning ? "Stop server" : "Start server"}
+					onClick={model.serverRunning ? actions.onStopServer : actions.onStartServer}
+					className={model.serverRunning ? "is-running" : "is-stopped"}
+				/>
+				<IconButton
+					icon="copy"
+					title="Copy invite link"
+					onClick={() => {
+						if (primaryInvite) {
+							actions.onCopyInvite(primaryInvite);
+						}
+					}}
+					disabled={!primaryInvite}
+				/>
+				<IconButton
+					icon="qr-code"
+					title="Show QR code"
+					onClick={() => setIsQrOpen(true)}
+					disabled={!primaryInvite}
+				/>
+			</div>
+
+			{isQrOpen && primaryInvite ? (
+				<QrCodeModal
+					url={primaryInvite}
+					onClose={() => {
+						setIsQrOpen(false);
+					}}
+				/>
+			) : null}
 		</div>
 	);
 }
 
-function InviteQrCode({ url }: { url: string }) {
+function IconButton({
+	icon,
+	title,
+	onClick,
+	disabled,
+	className,
+}: {
+	icon: string;
+	title: string;
+	onClick: () => void;
+	disabled?: boolean;
+	className?: string;
+}) {
+	const iconRef = useRef<HTMLSpanElement | null>(null);
+
+	useEffect(() => {
+		if (!iconRef.current) {
+			return;
+		}
+		setIcon(iconRef.current, icon);
+	}, [icon]);
+
+	const classes = ["encounter-cast-dashboard-icon-button", className].filter(Boolean).join(" ");
+
+	return (
+		<button type="button" className={classes} aria-label={title} title={title} onClick={onClick} disabled={disabled}>
+			<span ref={iconRef} className="encounter-cast-dashboard-icon" aria-hidden="true" />
+		</button>
+	);
+}
+
+function QrCodeModal({ url, onClose }: { url: string; onClose: () => void }) {
 	const [svg, setSvg] = useState<string | null>(null);
 	const [error, setError] = useState<string | null>(null);
 
@@ -125,7 +184,7 @@ function InviteQrCode({ url }: { url: string }) {
 		void QRCode.toString(url, {
 			type: "svg",
 			margin: 1,
-			width: 176,
+			width: 240,
 		}).then(
 			(markup: string) => {
 				if (!cancelled) {
@@ -145,16 +204,27 @@ function InviteQrCode({ url }: { url: string }) {
 	}, [url]);
 
 	return (
-		<div className="encounter-cast-dashboard-qr">
-			<div className="encounter-cast-dashboard-subtitle">QR code</div>
-			{svg ? (
-				<div
-					className="encounter-cast-dashboard-qr-frame"
-					dangerouslySetInnerHTML={{ __html: svg }}
-				/>
-			) : (
-				<p>{error ?? "Generating QR code..."}</p>
-			)}
+		<div className="encounter-cast-dashboard-modal-backdrop" onClick={onClose}>
+			<div
+				className="encounter-cast-dashboard-modal"
+				role="dialog"
+				aria-modal="true"
+				aria-label="Invite QR code"
+				onClick={(event) => event.stopPropagation()}
+			>
+				<div className="encounter-cast-dashboard-modal-header">
+					<h3>Invite QR code</h3>
+					<button type="button" onClick={onClose} aria-label="Close QR code modal" title="Close">
+						×
+					</button>
+				</div>
+				{svg ? (
+					<div className="encounter-cast-dashboard-qr-frame" dangerouslySetInnerHTML={{ __html: svg }} />
+				) : (
+					<p>{error ?? "Generating QR code..."}</p>
+				)}
+				<code>{url}</code>
+			</div>
 		</div>
 	);
 }
@@ -189,7 +259,19 @@ function CombatantRow({ combatant, isActive, isFirst, isLast, actions }: Combata
 					<div className="encounter-cast-combatant-meta">
 						<span>{combatant.monsterName}</span>
 						<span>CR {combatant.challenge ?? "-"}</span>
-						<span>DEX {combatant.dex ?? "-"}</span>
+						<span>DEX mod {combatant.dexMod ?? "-"}</span>
+						<span>
+							INIT {combatant.initiative ?? "-"}
+							{combatant.initiativeCriticalFailure ? (
+								<>
+									{" "}(
+									<span className="encounter-cast-combatant-init-crit" title="Critical failure on initiative roll">
+										1
+									</span>
+									)
+								</>
+							) : null}
+						</span>
 					</div>
 				</div>
 			</div>
@@ -213,6 +295,15 @@ function CombatantRow({ combatant, isActive, isFirst, isLast, actions }: Combata
 						onInput={(event) => actions.onSetAc(combatant.id, (event.currentTarget as HTMLInputElement).value)}
 					/>
 				</label>
+				<label>
+					<span>Init mod</span>
+					<input
+						type="number"
+						value={combatant.dexMod ?? ""}
+						placeholder="-"
+						onInput={(event) => actions.onSetDexMod(combatant.id, (event.currentTarget as HTMLInputElement).value)}
+					/>
+				</label>
 				<div className="encounter-cast-combatant-buttons">
 					<button type="button" onClick={() => actions.onMoveCombatant(combatant.id, "up")} disabled={isFirst}>
 						Up
@@ -228,3 +319,7 @@ function CombatantRow({ combatant, isActive, isFirst, isLast, actions }: Combata
 		</div>
 	);
 }
+
+
+
+
