@@ -9,6 +9,7 @@ export interface PlayerTheme {
 	textNormal: string;
 	textMuted: string;
 	interactiveAccent: string;
+	textOnAccent: string;
 	border: string;
 }
 
@@ -34,6 +35,7 @@ export interface PlayerJoinResponse {
 export interface InitiativeSubmitPayload {
 	playerId: PlayerId;
 	initiativeTotal: number;
+	rollType?: "nat1" | "normal" | "nat20";
 }
 
 export interface PlayerUpdatePayload {

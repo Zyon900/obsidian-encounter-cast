@@ -310,7 +310,7 @@ export default class EncounterCastPlugin extends Plugin {
 
 		const totalCreatures = prepared.resolvedResult.resolved.reduce((sum, item) => sum + item.entry.quantity, 0);
 		if (mode === "run") {
-			const players = this.getPlayerCombatants();
+			const players = this.preparePlayerCombatantsForCombatStart(this.getPlayerCombatants());
 			const baseSession: CombatSession = this.currentSession
 				? {
 						...this.currentSession,
@@ -535,13 +535,40 @@ export default class EncounterCastPlugin extends Plugin {
 		return this.currentSession.combatants.filter((combatant) => combatant.isPlayer === true);
 	}
 
+	private preparePlayerCombatantsForCombatStart(combatants: CombatSession["combatants"]): CombatSession["combatants"] {
+		return combatants.map((combatant) => ({
+			...combatant,
+			initiative: null,
+			initiativeRoll: null,
+			initiativeCriticalFailure: false,
+		}));
+	}
+
+	private clearPlayerInitiatives(session: CombatSession): CombatSession {
+		return {
+			...session,
+			combatants: session.combatants.map((combatant) =>
+				combatant.isPlayer === true
+					? {
+							...combatant,
+							initiative: null,
+							initiativeRoll: null,
+							initiativeCriticalFailure: false,
+						}
+					: combatant,
+			),
+			updatedAt: new Date().toISOString(),
+		};
+	}
+
 	private startEncounterFromDashboard(): void {
 		if (!this.currentSession) {
 			new Notice("No encounter available to run.");
 			return;
 		}
 
-		this.currentSession = setActiveToTopCombatant(rollMonsterInitiative(this.currentSession));
+		const withClearedPlayerInitiative = this.clearPlayerInitiatives(this.currentSession);
+		this.currentSession = setActiveToTopCombatant(rollMonsterInitiative(withClearedPlayerInitiative));
 		this.encounterRunning = true;
 		this.updateSession(this.currentSession);
 		new Notice("Encounter running.");
@@ -842,6 +869,7 @@ export default class EncounterCastPlugin extends Plugin {
 			textNormal: read("--text-normal", "#e8e8e8"),
 			textMuted: read("--text-muted", "#aaaaaa"),
 			interactiveAccent: read("--interactive-accent", "#5ea6ff"),
+			textOnAccent: read("--text-on-accent", "#ffffff"),
 			border: read("--background-modifier-border", "#3a3a3a"),
 		};
 	}

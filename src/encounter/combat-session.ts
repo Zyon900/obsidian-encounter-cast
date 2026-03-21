@@ -253,6 +253,7 @@ export function setCombatantInitiative(
 	session: CombatSession,
 	combatantId: string,
 	initiativeTotal: number | null,
+	rollType: "nat1" | "normal" | "nat20" = "normal",
 ): CombatSession {
 	const sourceIndex = session.combatants.findIndex((combatant) => combatant.id === combatantId);
 	if (sourceIndex === -1) {
@@ -268,8 +269,8 @@ export function setCombatantInitiative(
 	combatants[sourceIndex] = {
 		...target,
 		initiative: initiativeTotal === null ? null : Math.max(1, Math.trunc(initiativeTotal)),
-		initiativeRoll: null,
-		initiativeCriticalFailure: false,
+		initiativeRoll: rollType === "nat1" ? 1 : rollType === "nat20" ? 20 : null,
+		initiativeCriticalFailure: rollType === "nat1",
 	};
 	const sorted = sortCombatantsByInitiative(combatants);
 	const activeId = session.combatants[session.activeIndex]?.id ?? null;

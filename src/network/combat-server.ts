@@ -4,6 +4,7 @@ import { networkInterfaces } from "node:os";
 import {
 	advanceCombatTurn,
 	createCombatSession,
+	setActiveToTopCombatant,
 	setCombatantAc,
 	setCombatantHp,
 	setCombatantHpMax,
@@ -299,7 +300,16 @@ export class CombatServer {
 			return false;
 		}
 
-		const next = setCombatantInitiative(this.activeSession, player.combatantId, total);
+		const shouldFollowTopOnOpeningTurn =
+			this.encounterRunning && this.activeSession.round === 1 && this.activeSession.activeIndex === 0;
+		const rollType =
+			payload.rollType === "nat1" || payload.rollType === "nat20" || payload.rollType === "normal"
+				? payload.rollType
+				: "normal";
+		let next = setCombatantInitiative(this.activeSession, player.combatantId, total, rollType);
+		if (shouldFollowTopOnOpeningTurn) {
+			next = setActiveToTopCombatant(next);
+		}
 		if (next === this.activeSession) {
 			return false;
 		}
@@ -561,6 +571,7 @@ export class CombatServer {
 			textNormal: "#e8e8e8",
 			textMuted: "#aaaaaa",
 			interactiveAccent: "#5ea6ff",
+			textOnAccent: "#ffffff",
 			border: "#3a3a3a",
 		};
 
@@ -571,34 +582,512 @@ export class CombatServer {
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>EncounterCast Player</title>
   <style>
-    body { margin: 0; font-family: ui-sans-serif, system-ui, sans-serif; background: ${theme.backgroundPrimary}; color: ${theme.textNormal}; }
-    .wrap { max-width: 760px; margin: 0 auto; padding: 16px; }
-    .panel { border: 1px solid ${theme.border}; border-radius: 12px; padding: 12px; margin-bottom: 12px; background: ${theme.backgroundSecondary}; }
-    .row { display: flex; gap: 8px; align-items: center; }
-    input, button { padding: 8px; border-radius: 8px; border: 1px solid ${theme.border}; background: transparent; color: inherit; }
-    button { background: ${theme.interactiveAccent}; color: #fff; border: 0; cursor: pointer; }
-    .combatant { border: 1px solid ${theme.border}; border-radius: 10px; padding: 8px; margin-top: 8px; }
-    .combatant.active { border-color: ${theme.interactiveAccent}; }
-    .combatant.self { box-shadow: inset 0 0 0 1px ${theme.interactiveAccent}; }
-    .combatant.is-your-turn { animation: pulse 1.2s ease-in-out infinite; }
-    @keyframes pulse { 0%,100% { box-shadow: inset 0 0 0 1px ${theme.interactiveAccent}; } 50% { box-shadow: inset 0 0 0 2px ${theme.interactiveAccent}; } }
+    :root { color-scheme: dark light; }
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, sans-serif;
+      background: ${theme.backgroundPrimary};
+      color: ${theme.textNormal};
+    }
+    .wrap {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 16px 16px 260px;
+    }
+    .panel {
+      border: 1px solid ${theme.border};
+      border-radius: 12px;
+      padding: 12px;
+      margin-bottom: 12px;
+      background: ${theme.backgroundSecondary};
+    }
+    .app-shell {
+      margin-bottom: 8px;
+    }
+    .app-header {
+      margin-bottom: 8px;
+      justify-content: center;
+    }
+    #status {
+      text-align: center;
+      margin-bottom: 6px;
+    }
+    .row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    input, button {
+      padding: 8px;
+      border-radius: 8px;
+      border: 1px solid ${theme.border};
+      background: transparent;
+      color: inherit;
+    }
+    input::placeholder {
+      color: ${theme.textMuted};
+    }
+    button {
+      background: ${theme.interactiveAccent};
+      color: ${theme.textOnAccent};
+      border: 0;
+      cursor: pointer;
+    }
+    button:disabled {
+      opacity: 0.55;
+      cursor: default;
+    }
+    .subtle {
+      color: ${theme.textMuted};
+      font-size: 12px;
+    }
+    .combatant {
+      border: 1px solid ${theme.border};
+      border-radius: 10px;
+      padding: 8px;
+      margin-top: 8px;
+      background: ${theme.backgroundSecondary};
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .combatant.active {
+      border-color: ${theme.interactiveAccent};
+    }
+    .combatant.is-self {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.22);
+    }
+    .combatant.is-your-turn {
+      animation: pulse 1.2s ease-in-out infinite;
+    }
+    .initiative {
+      position: relative;
+      width: 40px;
+      height: 40px;
+      flex: 0 0 40px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 15px;
+    }
+    .initiative svg {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      fill: ${theme.backgroundPrimary};
+      stroke: ${theme.border};
+      stroke-width: 1.4;
+    }
+    .initiative span {
+      position: relative;
+      z-index: 1;
+    }
+    .name-block {
+      min-width: 0;
+      flex: 1 1 auto;
+    }
+    .name {
+      font-weight: 600;
+      line-height: 1.2;
+      word-break: break-word;
+    }
+    .hp-label {
+      text-transform: capitalize;
+      font-size: 12px;
+      margin-top: 2px;
+      color: ${theme.textMuted};
+    }
+    .hp-label.is-unscathed, .hp-label.is-healthy {
+      color: #3bb273;
+    }
+    .hp-label.is-hurt {
+      color: #d8a106;
+    }
+    .hp-label.is-critically-wounded, .hp-label.is-down {
+      color: #e05a5a;
+    }
+    .hp-label.is-dead {
+      color: #7e8791;
+    }
+    .tail {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex: 0 0 auto;
+    }
+    .shield {
+      position: relative;
+      width: 40px;
+      height: 40px;
+      flex: 0 0 40px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 15px;
+    }
+    .shield svg {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      fill: ${theme.backgroundPrimary};
+      stroke: ${theme.border};
+      stroke-width: 1.4;
+    }
+    .shield span {
+      position: relative;
+      z-index: 1;
+    }
+    .shield.placeholder {
+      opacity: 0;
+      pointer-events: none;
+    }
+    .stats {
+      display: flex;
+      gap: 8px;
+      color: ${theme.textMuted};
+      font-size: 12px;
+      white-space: nowrap;
+      flex-wrap: wrap;
+    }
+    .stats strong {
+      color: ${theme.textNormal};
+      font-weight: 600;
+      margin-left: 3px;
+    }
+    .stat-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      border: 1px solid ${theme.border};
+      border-radius: 999px;
+      padding: 2px 8px;
+      background: ${theme.backgroundPrimary};
+    }
+    .stat-chip .icon {
+      opacity: 0.9;
+    }
+    .sheet {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      border-top: 1px solid ${theme.border};
+      border-top-left-radius: 16px;
+      border-top-right-radius: 16px;
+      background: ${theme.backgroundSecondary};
+      padding: 12px 16px 14px;
+      box-sizing: border-box;
+      z-index: 40;
+    }
+    .sheet-handle {
+      width: 36px;
+      height: 4px;
+      border-radius: 999px;
+      background: ${theme.textMuted};
+      opacity: 0.55;
+      margin: 0 auto 10px;
+    }
+    .sheet-header {
+      margin-bottom: 8px;
+    }
+    .sheet-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .sheet-grid label {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      font-size: 12px;
+      color: ${theme.textMuted};
+    }
+    .sheet-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .sheet-actions button {
+      width: 100%;
+      min-height: 48px;
+      font-size: 15px;
+      font-weight: 600;
+      background: transparent;
+      border: 1px solid ${theme.border};
+      color: ${theme.textNormal};
+    }
+    .sheet-actions button.is-active {
+      background: ${theme.interactiveAccent};
+      border-color: transparent;
+      color: ${theme.textOnAccent};
+    }
+    .sheet-actions button.is-hidden {
+      display: none;
+    }
+    .sheet-actions .sep {
+      color: ${theme.textMuted};
+      opacity: 0.9;
+      padding: 0 4px;
+    }
+    .sheet-panel {
+      display: none;
+      margin-top: 8px;
+    }
+    .sheet-panel.open {
+      display: block;
+    }
+    .sheet-summary {
+      color: ${theme.textMuted};
+      font-size: 12px;
+      margin-bottom: 2px;
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .sheet-summary.is-hidden {
+      display: none;
+    }
+    .sheet-turn-cta {
+      max-height: 0;
+      opacity: 0;
+      transform: translateY(18px);
+      overflow: hidden;
+      transition: max-height 180ms ease, opacity 180ms ease, transform 180ms ease;
+    }
+    .sheet-turn-cta.is-visible {
+      max-height: 52px;
+      opacity: 1;
+      transform: translateY(0);
+      margin-top: 8px;
+    }
+    .sheet-turn-cta button {
+      width: 100%;
+      background: ${theme.interactiveAccent};
+      color: ${theme.textOnAccent};
+      border: 0;
+      font-weight: 600;
+    }
+    .initiative-gate {
+      position: fixed;
+      inset: 0;
+      display: none;
+      z-index: 100;
+      background: ${theme.backgroundPrimary};
+      padding: 20px;
+      box-sizing: border-box;
+      align-items: center;
+      justify-content: center;
+    }
+    .initiative-gate.open {
+      display: flex;
+    }
+    .initiative-gate-card {
+      width: min(420px, 100%);
+      border: 1px solid ${theme.border};
+      border-radius: 14px;
+      background: ${theme.backgroundSecondary};
+      padding: 16px;
+      text-align: center;
+    }
+    .initiative-gate-card h2 {
+      margin: 0 0 12px;
+    }
+    .initiative-gate-card input {
+      width: 100%;
+      font-size: 18px;
+      padding: 10px;
+      box-sizing: border-box;
+      text-align: center;
+      margin-bottom: 10px;
+    }
+    .initiative-gate-card button {
+      width: 100%;
+      font-size: 15px;
+      font-weight: 600;
+    }
+    .initiative-roll-toggle {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .initiative-roll-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      border: 1px solid ${theme.border};
+      background: transparent;
+      color: ${theme.textNormal};
+      min-height: 42px;
+      font-weight: 600;
+    }
+    .initiative-roll-btn.is-active {
+      background: ${theme.interactiveAccent};
+      color: #fff;
+      border-color: transparent;
+    }
+    .initiative-roll-btn .hex {
+      font-weight: 700;
+      font-size: 12px;
+      min-width: 18px;
+      text-align: center;
+    }
+    .initiative-roll-btn.hex-only {
+      padding: 8px;
+      min-width: 56px;
+    }
+    .initiative-mini-hex {
+      position: relative;
+      width: 26px;
+      height: 26px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 700;
+      color: inherit;
+      line-height: 1;
+    }
+    .initiative-mini-hex svg {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      fill: ${theme.backgroundPrimary};
+      stroke: currentColor;
+      stroke-width: 1.6;
+    }
+    .initiative-mini-hex span {
+      position: relative;
+      z-index: 1;
+    }
+    .initiative-roll-btn .hex.red {
+      color: #e05a5a;
+    }
+    .initiative-roll-btn .hex.green {
+      color: #3bb273;
+    }
+    .initiative-roll-btn.is-active .hex.red,
+    .initiative-roll-btn.is-active .hex.green {
+      color: ${theme.textOnAccent};
+    }
+    @media (max-width: 640px) {
+      .wrap {
+        padding: 14px 14px 290px;
+      }
+      input, button {
+        min-height: 44px;
+        font-size: 16px;
+        padding: 10px 12px;
+      }
+      .sheet {
+        padding-bottom: calc(14px + env(safe-area-inset-bottom));
+      }
+      .sheet-grid {
+        grid-template-columns: 1fr;
+      }
+      .sheet-summary {
+        font-size: 13px;
+      }
+      .initiative-gate-card {
+        padding: 18px;
+      }
+      .initiative-gate-card h2 {
+        font-size: 28px;
+      }
+      .initiative-gate-card input {
+        min-height: 52px;
+        font-size: 21px;
+      }
+      .initiative-gate-card button {
+        min-height: 52px;
+        font-size: 17px;
+      }
+      .initiative-roll-btn {
+        min-height: 48px;
+        font-size: 14px;
+      }
+    }
+    @keyframes pulse {
+      0%, 100% { box-shadow: inset 0 0 0 1px ${theme.interactiveAccent}; }
+      50% { box-shadow: inset 0 0 0 2px ${theme.interactiveAccent}; }
+    }
   </style>
 </head>
 <body>
   <div class="wrap">
     <div class="panel" id="joinPanel">
       <h3>Join encounter</h3>
-      <div class="row"><input id="nameInput" placeholder="Your name"><button id="joinBtn">Join</button></div>
+      <div class="sheet-grid">
+        <label>Name<input id="nameInput" placeholder="Your name" /></label>
+        <label>AC<input id="joinAcInput" type="number" placeholder="Optional" /></label>
+        <label>HP<input id="joinHpInput" type="number" placeholder="Optional" /></label>
+        <label>Max HP<input id="joinHpMaxInput" type="number" placeholder="Optional" /></label>
+        <label>Temp HP<input id="joinTempHpInput" type="number" placeholder="Optional" /></label>
+      </div>
+      <div class="row"><button id="joinBtn">Join</button></div>
       <div id="joinMsg"></div>
     </div>
-    <div class="panel" id="appPanel" style="display:none;">
-      <div class="row" style="justify-content:space-between;">
-        <strong id="title">Encounter</strong>
-        <button id="endTurnBtn">End turn</button>
-      </div>
+    <div id="appPanel" class="app-shell" style="display:none;">
+      <div class="app-header row"><strong id="title">Encounter</strong></div>
       <div id="status"></div>
-      <div id="selfEdit" class="panel"></div>
       <div id="list"></div>
+    </div>
+  </div>
+  <div id="initiativeGate" class="initiative-gate" aria-live="polite">
+    <div class="initiative-gate-card">
+      <h2>Roll Initiative!</h2>
+      <input id="initiativeGateInput" type="number" inputmode="numeric" placeholder="Initiative total" />
+      <div class="initiative-roll-toggle">
+        <button id="initiativeNat1Btn" class="initiative-roll-btn hex-only" type="button" aria-label="Natural 1">
+          <span class="initiative-mini-hex hex red">
+            <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 2 27.8 8.7 27.8 23.3 16 30 4.2 23.3 4.2 8.7Z"></path></svg>
+            <span>1</span>
+          </span>
+        </button>
+        <button id="initiativeNormalBtn" class="initiative-roll-btn is-active" type="button"><span>Normal</span></button>
+        <button id="initiativeNat20Btn" class="initiative-roll-btn hex-only" type="button" aria-label="Natural 20">
+          <span class="initiative-mini-hex hex green">
+            <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 2 27.8 8.7 27.8 23.3 16 30 4.2 23.3 4.2 8.7Z"></path></svg>
+            <span>20</span>
+          </span>
+        </button>
+      </div>
+      <button id="initiativeGateSubmit" type="button">Submit initiative</button>
+    </div>
+  </div>
+  <div id="sheetRoot" class="sheet" style="display:none;">
+    <div class="sheet-handle" aria-hidden="true"></div>
+    <div id="editPanel" class="sheet-panel">
+      <div class="sheet-grid">
+        <label>AC<input id="sheetAc" type="number" placeholder="AC" /></label>
+        <label>HP<input id="sheetHp" type="number" placeholder="HP" /></label>
+        <label>Max HP<input id="sheetHpMax" type="number" placeholder="Max HP" /></label>
+        <label>Temp HP<input id="sheetTempHp" type="number" placeholder="Temp HP" /></label>
+      </div>
+    </div>
+    <div class="sheet-header">
+      <div id="sheetSummary" class="sheet-summary"><span class="stat-chip"><span class="icon">&#9829;</span><span>-/-</span></span><span class="stat-chip"><span class="icon">&#10022;</span><span>+0</span></span></div>
+    </div>
+    <div id="damagePanel" class="sheet-panel">
+      <div class="sheet-grid">
+        <label>Damage / heal<input id="sheetDamage" type="number" placeholder="e.g. 7 damage or -7 heal" /></label>
+      </div>
+    </div>
+    <div class="sheet-actions">
+      <button id="editModeBtn" type="button">Edit stats</button>
+      <button id="damageModeBtn" type="button">Damage <span class="sep">|</span> Heal</button>
+    </div>
+    <div id="sheetTurnCta" class="sheet-turn-cta">
+      <button id="endRoundBtn" type="button">End round</button>
     </div>
   </div>
   <script>
@@ -607,16 +1096,41 @@ export class CombatServer {
     const joinPanel = document.getElementById("joinPanel");
     const appPanel = document.getElementById("appPanel");
     const nameInput = document.getElementById("nameInput");
+    const joinAcInput = document.getElementById("joinAcInput");
+    const joinHpInput = document.getElementById("joinHpInput");
+    const joinHpMaxInput = document.getElementById("joinHpMaxInput");
+    const joinTempHpInput = document.getElementById("joinTempHpInput");
     const joinBtn = document.getElementById("joinBtn");
     const joinMsg = document.getElementById("joinMsg");
     const statusEl = document.getElementById("status");
     const listEl = document.getElementById("list");
-    const selfEdit = document.getElementById("selfEdit");
-    const endTurnBtn = document.getElementById("endTurnBtn");
+    const initiativeGate = document.getElementById("initiativeGate");
+    const initiativeGateInput = document.getElementById("initiativeGateInput");
+    const initiativeNat1Btn = document.getElementById("initiativeNat1Btn");
+    const initiativeNormalBtn = document.getElementById("initiativeNormalBtn");
+    const initiativeNat20Btn = document.getElementById("initiativeNat20Btn");
+    const initiativeGateSubmit = document.getElementById("initiativeGateSubmit");
     const titleEl = document.getElementById("title");
+    const sheetRoot = document.getElementById("sheetRoot");
+    const sheetSummary = document.getElementById("sheetSummary");
+    const editModeBtn = document.getElementById("editModeBtn");
+    const damageModeBtn = document.getElementById("damageModeBtn");
+    const editPanel = document.getElementById("editPanel");
+    const damagePanel = document.getElementById("damagePanel");
+    const sheetAc = document.getElementById("sheetAc");
+    const sheetHp = document.getElementById("sheetHp");
+    const sheetHpMax = document.getElementById("sheetHpMax");
+    const sheetTempHp = document.getElementById("sheetTempHp");
+    const sheetDamage = document.getElementById("sheetDamage");
+    const sheetTurnCta = document.getElementById("sheetTurnCta");
+    const endRoundBtn = document.getElementById("endRoundBtn");
     let playerId = localStorage.getItem("encounter-cast-player-id") || "";
     let stream = null;
     let serverShutDown = false;
+    let lastState = null;
+    let sheetMode = "none";
+    let initiativeGateOpen = false;
+    let initiativeRollType = "normal";
 
     async function api(path, method = "GET", body) {
       const url = path + (path.includes("?") ? "&" : "?") + "token=" + encodeURIComponent(token);
@@ -633,47 +1147,197 @@ export class CombatServer {
       return Number.isFinite(n) ? n : null;
     }
 
+    function readOptionalInputNumber(el) {
+      if (!el) return null;
+      const value = el.value.trim();
+      if (!value.length) return null;
+      const parsed = Number.parseInt(value, 10);
+      return Number.isFinite(parsed) ? parsed : null;
+    }
+
+    function esc(value) {
+      return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    function hpClass(label) {
+      return "hp-label is-" + String(label).replaceAll(" ", "-");
+    }
+
+    function setSheetMode(mode) {
+      sheetMode = mode;
+      const isEdit = mode === "edit";
+      const isDamage = mode === "damage";
+      editPanel.classList.toggle("open", isEdit);
+      damagePanel.classList.toggle("open", isDamage);
+      editModeBtn.classList.toggle("is-active", isEdit);
+      damageModeBtn.classList.toggle("is-active", isDamage);
+      editModeBtn.classList.toggle("is-hidden", isDamage);
+      sheetSummary.classList.toggle("is-hidden", isEdit);
+      editModeBtn.textContent = isEdit ? "Save stats" : "Edit stats";
+      damageModeBtn.innerHTML = isDamage
+        ? "Apply Damage <span class='sep'>|</span> Heal"
+        : "Damage <span class='sep'>|</span> Heal";
+      if (isDamage) {
+        setTimeout(() => {
+          sheetDamage.focus();
+          sheetDamage.select();
+        }, 20);
+      }
+    }
+
+    function setSheetFromSelf(self) {
+      if (!self) {
+        sheetSummary.innerHTML = "<span class='stat-chip'><span class='icon'>&#9829;</span><span>-/-</span></span><span class='stat-chip'><span class='icon'>&#10022;</span><span>+0</span></span>";
+        sheetAc.value = "";
+        sheetHp.value = "";
+        sheetHpMax.value = "";
+        sheetTempHp.value = "";
+        if (sheetMode !== "damage") {
+          sheetDamage.value = "";
+        }
+        return;
+      }
+      sheetSummary.innerHTML =
+        "<span class='stat-chip'><span class='icon'>&#9829;</span><span>" + esc(self.hpCurrent ?? "-") + "/" + esc(self.hpMax ?? "-") + "</span></span>" +
+        "<span class='stat-chip'><span class='icon'>&#10022;</span><span>+" + esc(self.tempHp ?? 0) + "</span></span>";
+      sheetAc.value = self.ac ?? "";
+      sheetHp.value = self.hpCurrent ?? "";
+      sheetHpMax.value = self.hpMax ?? "";
+      sheetTempHp.value = self.tempHp ?? 0;
+      if (sheetMode !== "damage") {
+        sheetDamage.value = "";
+      }
+    }
+
+    async function saveFromSheet() {
+      if (!playerId) return;
+      await api("/api/player/update", "POST", {
+        playerId,
+        ac: readNum("sheetAc"),
+        hpCurrent: readNum("sheetHp"),
+        hpMax: readNum("sheetHpMax"),
+        tempHp: readNum("sheetTempHp") ?? 0
+      });
+      await refresh();
+      setSheetMode("none");
+    }
+
+    async function applyDamageFromSheet() {
+      if (!playerId || !lastState) return;
+      const ps = lastState.playerState;
+      const self = ps.combatants.find((c) => c.isSelf);
+      if (!self) return;
+
+      const rawDamage = readNum("sheetDamage");
+      if (rawDamage === null) {
+        setSheetMode("none");
+        return;
+      }
+      let hpCurrent = self.hpCurrent ?? 0;
+      let hpMax = self.hpMax;
+      let tempHp = self.tempHp ?? 0;
+      const amount = rawDamage;
+
+      if (amount >= 0) {
+        const remainingAfterTemp = Math.max(0, amount - tempHp);
+        tempHp = Math.max(0, tempHp - amount);
+        hpCurrent = Math.max(0, hpCurrent - remainingAfterTemp);
+      } else {
+        const heal = Math.abs(amount);
+        const unclamped = hpCurrent + heal;
+        hpCurrent = hpMax === null ? unclamped : Math.min(hpMax, unclamped);
+      }
+
+      await api("/api/player/update", "POST", {
+        playerId,
+        hpCurrent,
+        tempHp
+      });
+      await refresh();
+      sheetDamage.value = "";
+      setSheetMode("none");
+    }
+
+    function initiativeMarkup(value) {
+      return "<span class='initiative'><svg viewBox='0 0 32 32' aria-hidden='true'><path d='M16 2 27.8 8.7 27.8 23.3 16 30 4.2 23.3 4.2 8.7Z'></path></svg><span>" + esc(value) + "</span></span>";
+    }
+
+    function shieldMarkup(value, isPlaceholder) {
+      const cls = "shield" + (isPlaceholder ? " placeholder" : "");
+      return "<span class='" + cls + "'><svg viewBox='0 0 32 32' aria-hidden='true'><path d='M16 2C18.4 3.5 21 4.8 27.4 7.1V15.8C27.4 22 23.2 27 16 30C8.8 27 4.6 22 4.6 15.8V7.1C11 4.8 13.6 3.5 16 2Z'></path></svg><span>" + esc(value ?? "-") + "</span></span>";
+    }
+
+    function setInitiativeRollType(nextType) {
+      initiativeRollType = nextType;
+      initiativeNat1Btn.classList.toggle("is-active", nextType === "nat1");
+      initiativeNormalBtn.classList.toggle("is-active", nextType === "normal");
+      initiativeNat20Btn.classList.toggle("is-active", nextType === "nat20");
+    }
+
+    function openInitiativeGate() {
+      if (initiativeGateOpen) return;
+      initiativeGateOpen = true;
+      setInitiativeRollType("normal");
+      initiativeGate.classList.add("open");
+      setTimeout(() => {
+        initiativeGateInput.focus();
+        initiativeGateInput.select();
+      }, 30);
+    }
+
+    function closeInitiativeGate() {
+      initiativeGateOpen = false;
+      initiativeGate.classList.remove("open");
+      initiativeGateInput.value = "";
+    }
+
     function render(state) {
+      lastState = state;
       const ps = state.playerState;
       titleEl.textContent = "Round " + ps.round;
       statusEl.textContent = ps.encounterRunning ? "Combat running" : "Waiting for combat start";
       const self = ps.combatants.find((c) => c.isSelf);
       const active = ps.activeCombatantId;
-      endTurnBtn.disabled = !self || !ps.encounterRunning || self.id !== active;
+      const isYourTurn = !!self && ps.encounterRunning && self.id === active;
+      endRoundBtn.disabled = !isYourTurn;
+      sheetTurnCta.classList.toggle("is-visible", isYourTurn);
+      editModeBtn.disabled = !self;
+      damageModeBtn.disabled = !self;
+      setSheetFromSelf(self);
 
-      if (self) {
-        selfEdit.innerHTML = "<h4>Your stats</h4><div class='row'>" +
-          "<input id='hp' type='number' placeholder='HP' value='" + (self.hpCurrent ?? "") + "'>" +
-          "<input id='hpMax' type='number' placeholder='Max HP' value='" + (self.hpMax ?? "") + "'>" +
-          "<input id='tempHp' type='number' placeholder='Temp HP' value='" + (self.tempHp ?? 0) + "'>" +
-          "<input id='ac' type='number' placeholder='AC' value='" + (self.ac ?? "") + "'>" +
-          "<button id='saveSelf'>Save</button></div>";
-        if (ps.encounterRunning && (self.initiative === null || self.initiative === undefined)) {
-          selfEdit.innerHTML += "<div class='row' style='margin-top:8px;'><input id='initiativeTotal' type='number' placeholder='Initiative total'><button id='submitInitiative'>Submit initiative</button></div>";
-        }
-        document.getElementById("saveSelf").onclick = async () => {
-          await api("/api/player/update", "POST", { playerId, hpCurrent: readNum("hp"), hpMax: readNum("hpMax"), tempHp: readNum("tempHp") ?? 0, ac: readNum("ac") });
-          await refresh();
-        };
-        const initiativeButton = document.getElementById("submitInitiative");
-        if (initiativeButton) {
-          initiativeButton.onclick = async () => {
-            const initiativeTotal = readNum("initiativeTotal");
-            if (initiativeTotal === null) return;
-            await api("/api/player/initiative", "POST", { playerId, initiativeTotal });
-            await refresh();
-          };
-        }
+      const needsInitiative = !!self && ps.encounterRunning && (self.initiative === null || self.initiative === undefined);
+      if (needsInitiative) {
+        openInitiativeGate();
       } else {
-        selfEdit.innerHTML = "<div>No player combatant yet.</div>";
+        closeInitiativeGate();
       }
 
       listEl.innerHTML = "";
       for (const c of ps.combatants) {
         const el = document.createElement("div");
         const yourTurn = c.isSelf && c.id === active;
-        el.className = "combatant" + (c.id === active ? " active" : "") + (c.isSelf ? " self" : "") + (yourTurn ? " is-your-turn" : "");
-        el.innerHTML = "<div class='row' style='justify-content:space-between;'><strong>" + c.name + "</strong><span>Init: " + (c.initiative ?? "-") + "</span></div><div>" + c.hpLabel + "</div>";
+        const isMonster = c.isPlayer !== true;
+        const isSelf = c.isSelf === true;
+        const showAc = isSelf || c.isPlayer;
+        const hpText = isSelf
+          ? "<div class='stats'>" +
+              "<span class='stat-chip'><span class='icon'>&#9829;</span><span>" + esc(c.hpCurrent ?? "-") + "/" + esc(c.hpMax ?? "-") + "</span></span>" +
+              "<span class='stat-chip'><span class='icon'>&#10022;</span><span>+" + esc(c.tempHp ?? 0) + "</span></span>" +
+            "</div>"
+          : "<div class='" + hpClass(c.hpLabel) + "'>" + esc(c.hpLabel) + "</div>";
+        el.className = "combatant" + (c.id === active ? " active" : "") + (isSelf ? " is-self" : "") + (yourTurn ? " is-your-turn" : "");
+        el.innerHTML =
+          initiativeMarkup(c.initiative ?? "-") +
+          "<div class='name-block'><div class='name'>" + esc(c.name) + "</div>" + hpText + "</div>" +
+          "<div class='tail'>" +
+            (showAc ? shieldMarkup(c.ac ?? "-", false) : shieldMarkup("-", true)) +
+            (isMonster ? "<span class='subtle'>monster</span>" : "") +
+          "</div>";
         listEl.appendChild(el);
       }
     }
@@ -713,7 +1377,7 @@ export class CombatServer {
           }
         })();
         statusEl.textContent = message;
-        selfEdit.innerHTML = "<div>Server is offline.</div>";
+        closeInitiativeGate();
         listEl.innerHTML = "";
       });
       stream.onerror = async () => {
@@ -736,21 +1400,91 @@ export class CombatServer {
       if (!data.ok) { joinMsg.textContent = data.error || "Join failed."; return; }
       playerId = data.player.playerId;
       localStorage.setItem("encounter-cast-player-id", playerId);
+      const joinAc = readOptionalInputNumber(joinAcInput);
+      const joinHp = readOptionalInputNumber(joinHpInput);
+      const joinHpMax = readOptionalInputNumber(joinHpMaxInput);
+      const joinTempHp = readOptionalInputNumber(joinTempHpInput);
+      const hasOptionalJoinStats = joinAc !== null || joinHp !== null || joinHpMax !== null || joinTempHp !== null;
+      if (hasOptionalJoinStats) {
+        await api("/api/player/update", "POST", {
+          playerId,
+          ac: joinAc,
+          hpCurrent: joinHp,
+          hpMax: joinHpMax,
+          tempHp: joinTempHp ?? 0
+        });
+      }
       joinPanel.style.display = "none";
       appPanel.style.display = "block";
-      render(data.state);
+      sheetRoot.style.display = "block";
+      if (hasOptionalJoinStats) {
+        await refresh();
+      } else {
+        render(data.state);
+      }
       startStream();
     };
 
-    endTurnBtn.onclick = async () => {
+    endRoundBtn.onclick = async () => {
       if (!playerId) return;
       await api("/api/player/end-turn", "POST", { playerId });
     };
+    initiativeNat1Btn.onclick = () => setInitiativeRollType("nat1");
+    initiativeNormalBtn.onclick = () => setInitiativeRollType("normal");
+    initiativeNat20Btn.onclick = () => setInitiativeRollType("nat20");
+    initiativeGateSubmit.onclick = async () => {
+      const initiativeTotal = Number.parseInt(initiativeGateInput.value.trim(), 10);
+      if (!Number.isFinite(initiativeTotal)) return;
+      await api("/api/player/initiative", "POST", { playerId, initiativeTotal, rollType: initiativeRollType });
+      await refresh();
+    };
+    initiativeGateInput.addEventListener("keydown", async (event) => {
+      if (event.key !== "Enter") return;
+      event.preventDefault();
+      initiativeGateSubmit.click();
+    });
+
+    editModeBtn.onclick = async () => {
+      if (sheetMode === "edit") {
+        await saveFromSheet();
+        return;
+      }
+      setSheetMode("edit");
+    };
+    damageModeBtn.onclick = async () => {
+      if (sheetMode === "damage") {
+        await applyDamageFromSheet();
+        return;
+      }
+      setSheetMode("damage");
+    };
+    sheetDamage.addEventListener("keydown", async (event) => {
+      if (event.key !== "Enter") {
+        return;
+      }
+      event.preventDefault();
+      await applyDamageFromSheet();
+    });
+    sheetDamage.addEventListener("blur", () => {
+      setTimeout(() => {
+        if (sheetMode !== "damage") {
+          return;
+        }
+        const active = document.activeElement;
+        if (active === damageModeBtn || active === sheetDamage) {
+          return;
+        }
+        sheetDamage.value = "";
+        setSheetMode("none");
+      }, 0);
+    });
+    setSheetMode("none");
 
     if (playerId) {
       refresh().then(() => {
         joinPanel.style.display = "none";
         appPanel.style.display = "block";
+        sheetRoot.style.display = "block";
         startStream();
       });
     }
