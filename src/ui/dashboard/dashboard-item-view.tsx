@@ -1,9 +1,9 @@
 import { ItemView, WorkspaceLeaf } from "obsidian";
 import { render } from "preact";
-import { DmDashboard } from "./dm-dashboard";
+import { DashboardPanel } from "./dashboard-panel";
 import type { DashboardActions, DashboardViewModel } from "./types";
 
-export const DM_DASHBOARD_VIEW_TYPE = "encounter-cast-dm-dashboard";
+export const DASHBOARD_VIEW_TYPE = "encounter-cast-dm-dashboard";
 
 const EMPTY_MODEL: DashboardViewModel = {
 	session: null,
@@ -14,7 +14,7 @@ const EMPTY_MODEL: DashboardViewModel = {
 	inviteUrls: [],
 };
 
-export class DmDashboardView extends ItemView {
+export class DashboardItemView extends ItemView {
 	private model: DashboardViewModel = EMPTY_MODEL;
 
 	constructor(leaf: WorkspaceLeaf, private readonly actions: DashboardActions) {
@@ -22,7 +22,7 @@ export class DmDashboardView extends ItemView {
 	}
 
 	getViewType(): string {
-		return DM_DASHBOARD_VIEW_TYPE;
+		return DASHBOARD_VIEW_TYPE;
 	}
 
 	getDisplayText(): string {
@@ -50,8 +50,6 @@ export class DmDashboardView extends ItemView {
 	}
 
 	private renderView(): void {
-		render(<DmDashboard model={this.model} actions={this.actions} />, this.contentEl);
+		render(<DashboardPanel model={this.model} actions={this.actions} />, this.contentEl);
 	}
 }
-
-

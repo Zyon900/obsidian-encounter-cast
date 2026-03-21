@@ -1,5 +1,5 @@
 import { Modal, Notice, Setting, type App } from "obsidian";
-import type { EncounterPartySettings } from "../../encounter/encounter-difficulty";
+import type { EncounterPartySettings } from "../../encounter/codeblock-difficulty";
 
 type SaveHandler = (settings: EncounterPartySettings) => Promise<void> | void;
 
@@ -84,4 +84,3 @@ function parseOptionalInt(value: string): number | null {
 	const parsed = Number.parseInt(trimmed, 10);
 	return Number.isFinite(parsed) ? parsed : null;
 }
-

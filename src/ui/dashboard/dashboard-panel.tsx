@@ -5,7 +5,7 @@ import type { Combatant } from "../../encounter/combat-session";
 import { MonsterHoverPreviewTrigger } from "../monsters/monster-hover-preview-trigger";
 import type { DashboardActions, DashboardViewModel } from "./types";
 
-interface DmDashboardProps {
+interface DashboardPanelProps {
 	model: DashboardViewModel;
 	actions: DashboardActions;
 }
@@ -41,7 +41,7 @@ function areWrappedMapsEqual(
 	return true;
 }
 // Main dashboard view: renders combatants, encounter controls, and QR modal.
-export function DmDashboard({ model, actions }: DmDashboardProps) {
+export function DashboardPanel({ model, actions }: DashboardPanelProps) {
 	const [isQrOpen, setIsQrOpen] = useState(false);
 	const [draggingCombatantId, setDraggingCombatantId] = useState<string | null>(null);
 	const [dragTargetIndex, setDragTargetIndex] = useState<number | null>(null);
@@ -324,34 +324,176 @@ function InitiativeDie({
 	title,
 	isCriticalFailure,
 	isCriticalSuccess,
+	isEditable = false,
+	editableValue = null,
+	onCommit,
 }: {
 	value: string;
 	title: string;
 	isCriticalFailure: boolean;
 	isCriticalSuccess: boolean;
+	isEditable?: boolean;
+	editableValue?: number | null;
+	onCommit?: (value: string) => void;
 }) {
+	const [isEditing, setIsEditing] = useState(false);
+	const [draftValue, setDraftValue] = useState("");
+	const inputRef = useRef<HTMLInputElement | null>(null);
+
+	useEffect(() => {
+		if (!isEditing || !inputRef.current) {
+			return;
+		}
+
+		const input = inputRef.current;
+		input.focus();
+		input.select();
+	}, [isEditing]);
+
+	const startEdit = () => {
+		if (!isEditable) {
+			return;
+		}
+		setDraftValue(editableValue === null ? "" : editableValue.toString());
+		setIsEditing(true);
+	};
+
+	const commit = () => {
+		setIsEditing(false);
+		onCommit?.(draftValue.trim());
+	};
+
+	const cancel = () => {
+		setIsEditing(false);
+		setDraftValue(editableValue === null ? "" : editableValue.toString());
+	};
+
 	const stateClass = isCriticalFailure ? "is-crit-fail" : isCriticalSuccess ? "is-crit-success" : "";
+	const className = `encounter-cast-initiative-die ${stateClass} ${isEditable ? "is-editable" : ""}`.trim();
 	return (
 		<span
-			className={`encounter-cast-initiative-die ${stateClass}`}
-			title={title}
+			className={className}
+			title={isEditable ? `${title} (double-click to edit)` : title}
+			onDblClick={startEdit}
+			role={isEditable ? "button" : undefined}
+			tabIndex={isEditable ? 0 : undefined}
+			aria-label={isEditable ? "Edit initiative modifier" : undefined}
+			onKeyDown={(event) => {
+				if (!isEditable) {
+					return;
+				}
+				if (event.key === "Enter" || event.key === " ") {
+					event.preventDefault();
+					startEdit();
+				}
+			}}
 		>
 			<svg className="encounter-cast-initiative-die-icon" viewBox="0 0 32 32" aria-hidden="true">
 				<path d="M16 2 27.8 8.7 27.8 23.3 16 30 4.2 23.3 4.2 8.7Z" />
 			</svg>
-			<span className="encounter-cast-initiative-die-value">{value}</span>
+			{isEditing ? (
+				<input
+					ref={inputRef}
+					type="number"
+					className="encounter-cast-glyph-input"
+					value={draftValue}
+					placeholder="-"
+					onInput={(event) => setDraftValue(event.currentTarget.value)}
+					onBlur={commit}
+					onClick={(event) => event.stopPropagation()}
+					onKeyDown={(event) => {
+						if (event.key === "Enter") {
+							event.preventDefault();
+							event.currentTarget.blur();
+							return;
+						}
+						if (event.key === "Escape") {
+							event.preventDefault();
+							cancel();
+						}
+					}}
+				/>
+			) : (
+				<span className="encounter-cast-initiative-die-value">{value}</span>
+			)}
 		</span>
 	);
 }
 
 // AC display glyph and value.
-function ArmorClassShield({ armorClass }: { armorClass: number | null }) {
+function ArmorClassShield({ armorClass, onCommit }: { armorClass: number | null; onCommit: (value: string) => void }) {
+	const [isEditing, setIsEditing] = useState(false);
+	const [draftValue, setDraftValue] = useState("");
+	const inputRef = useRef<HTMLInputElement | null>(null);
+
+	useEffect(() => {
+		if (!isEditing || !inputRef.current) {
+			return;
+		}
+
+		const input = inputRef.current;
+		input.focus();
+		input.select();
+	}, [isEditing]);
+
+	const startEdit = () => {
+		setDraftValue(armorClass === null ? "" : armorClass.toString());
+		setIsEditing(true);
+	};
+
+	const commit = () => {
+		setIsEditing(false);
+		onCommit(draftValue.trim());
+	};
+
+	const cancel = () => {
+		setIsEditing(false);
+		setDraftValue(armorClass === null ? "" : armorClass.toString());
+	};
+
 	return (
-		<span className="encounter-cast-ac-shield" title="Armor class">
+		<span
+			className="encounter-cast-ac-shield is-editable"
+			title="Armor class (double-click to edit)"
+			onDblClick={startEdit}
+			role="button"
+			tabIndex={0}
+			aria-label="Edit armor class"
+			onKeyDown={(event) => {
+				if (event.key === "Enter" || event.key === " ") {
+					event.preventDefault();
+					startEdit();
+				}
+			}}
+		>
 			<svg className="encounter-cast-ac-shield-icon" viewBox="0 0 32 32" aria-hidden="true">
 				<path d="M16 2C18.4 3.5 21 4.8 27.4 7.1V15.8C27.4 22 23.2 27 16 30C8.8 27 4.6 22 4.6 15.8V7.1C11 4.8 13.6 3.5 16 2Z" />
 			</svg>
-			<span className="encounter-cast-ac-shield-value">{armorClass ?? "-"}</span>
+			{isEditing ? (
+				<input
+					ref={inputRef}
+					type="number"
+					className="encounter-cast-glyph-input"
+					value={draftValue}
+					placeholder="-"
+					onInput={(event) => setDraftValue(event.currentTarget.value)}
+					onBlur={commit}
+					onClick={(event) => event.stopPropagation()}
+					onKeyDown={(event) => {
+						if (event.key === "Enter") {
+							event.preventDefault();
+							event.currentTarget.blur();
+							return;
+						}
+						if (event.key === "Escape") {
+							event.preventDefault();
+							cancel();
+						}
+					}}
+				/>
+			) : (
+				<span className="encounter-cast-ac-shield-value">{armorClass ?? "-"}</span>
+			)}
 		</span>
 	);
 }
@@ -536,6 +678,9 @@ function CombatantRow({
 					title={initiativeTitle}
 					isCriticalFailure={encounterRunning && combatant.initiativeCriticalFailure}
 					isCriticalSuccess={encounterRunning && combatant.initiativeRoll === 20}
+					isEditable={!encounterRunning}
+					editableValue={combatant.dexMod}
+					onCommit={(value) => actions.onSetDexMod(combatant.id, value)}
 				/>
 				<div className="encounter-cast-combatant-name-block">
 					<MonsterHoverPreviewTrigger
@@ -554,7 +699,7 @@ function CombatantRow({
 					<span className="encounter-cast-combatant-drag-dot-column" />
 					<span className="encounter-cast-combatant-drag-dot-column" />
 				</div>
-				<ArmorClassShield armorClass={combatant.ac} />
+				<ArmorClassShield armorClass={combatant.ac} onCommit={(value) => actions.onSetAc(combatant.id, value)} />
 				<div className="encounter-cast-combatant-hp-fields">
 					<label>
 						<span>HP</span>
@@ -624,9 +769,6 @@ function MonsterInfoButton({ onClick }: { onClick: () => void }) {
 		</button>
 	);
 }
-
-
-
 
 
 

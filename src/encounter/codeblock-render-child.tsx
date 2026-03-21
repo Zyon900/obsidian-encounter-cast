@@ -1,28 +1,28 @@
 import { MarkdownRenderChild } from "obsidian";
 import { render } from "preact";
-import { EncounterBlockWidget, type EncounterPreviewRow } from "../ui/encounter/encounter-block-widget";
+import { CodeblockWidget, type CodeblockRow } from "../ui/encounter/codeblock-widget";
 import type { MonsterRecord } from "../monsters/types";
-import type { EncounterPartySettings } from "./encounter-difficulty";
+import type { EncounterPartySettings } from "./codeblock-difficulty";
 
-interface EncounterBlockWidgetComponentProps {
+interface CodeblockRenderChildProps {
 	title: string | null;
-	rows: EncounterPreviewRow[];
+	rows: CodeblockRow[];
 	partySettings: EncounterPartySettings;
 	onInfo: (monster: MonsterRecord) => void;
 	onHoverInfo: (monster: MonsterRecord, anchorEl: HTMLElement) => void;
 	onHoverLeave: () => void;
-	onRowsChange: (rows: EncounterPreviewRow[], title: string | null) => void;
-	onTitleChange: (rows: EncounterPreviewRow[], title: string | null) => void;
-	onRunEncounter: (rows: EncounterPreviewRow[], title: string | null) => void;
-	onAddToEncounter: (rows: EncounterPreviewRow[], title: string | null) => void;
+	onRowsChange: (rows: CodeblockRow[], title: string | null) => void;
+	onTitleChange: (rows: CodeblockRow[], title: string | null) => void;
+	onRunEncounter: (rows: CodeblockRow[], title: string | null) => void;
+	onAddToEncounter: (rows: CodeblockRow[], title: string | null) => void;
 	onSelectMonsterForCodeblock: () => Promise<string | null>;
 	onDispose?: () => void;
 }
 
-export class EncounterBlockWidgetComponent extends MarkdownRenderChild {
-	private props: EncounterBlockWidgetComponentProps;
+export class CodeblockRenderChild extends MarkdownRenderChild {
+	private props: CodeblockRenderChildProps;
 
-	constructor(containerEl: HTMLElement, props: EncounterBlockWidgetComponentProps) {
+	constructor(containerEl: HTMLElement, props: CodeblockRenderChildProps) {
 		super(containerEl);
 		this.props = props;
 	}
@@ -43,7 +43,7 @@ export class EncounterBlockWidgetComponent extends MarkdownRenderChild {
 
 	private renderWidget(): void {
 		render(
-			<EncounterBlockWidget
+			<CodeblockWidget
 				title={this.props.title}
 				rows={this.props.rows}
 				partySettings={this.props.partySettings}
@@ -60,4 +60,3 @@ export class EncounterBlockWidgetComponent extends MarkdownRenderChild {
 		);
 	}
 }
-

@@ -1,5 +1,5 @@
 import type { MonsterRecord } from "../monsters/types";
-import type { ResolvedEncounterEntry } from "./encounter-resolver";
+import type { ResolvedEncounterEntry } from "./codeblock-resolver";
 
 export interface Combatant {
 	id: string;
@@ -105,6 +105,17 @@ export function rollMonsterInitiative(session: CombatSession): CombatSession {
 		...session,
 		activeIndex,
 		combatants,
+	});
+}
+
+export function setActiveToTopCombatant(session: CombatSession): CombatSession {
+	if (session.combatants.length === 0 || session.activeIndex === 0) {
+		return session;
+	}
+
+	return stamp({
+		...session,
+		activeIndex: 0,
 	});
 }
 
@@ -383,4 +394,3 @@ function sortCombatantsByInitiative(combatants: Combatant[]): Combatant[] {
 		})
 		.map((item) => item.combatant);
 }
-

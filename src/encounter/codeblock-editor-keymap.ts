@@ -70,7 +70,7 @@ function runEncounterEnterBehavior(view: EditorView): boolean {
 	return true;
 }
 
-export function createEncounterEditorKeymap() {
+export function createCodeblockEditorKeymap() {
 	const bindings: KeyBinding[] = [
 		{
 			key: "Enter",

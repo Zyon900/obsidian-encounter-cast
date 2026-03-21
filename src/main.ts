@@ -5,6 +5,7 @@ import {
 	createCombatSession,
 	moveCombatant,
 	rollMonsterInitiative,
+	setActiveToTopCombatant,
 	setActiveCombatant,
 	setCombatantAc,
 	setCombatantDexMod,
@@ -13,19 +14,19 @@ import {
 	setCombatantTempHp,
 	type CombatSession,
 } from "./encounter/combat-session";
-import { EncounterBlockWidgetComponent } from "./encounter/encounter-block-widget-component";
-import { createEncounterEditorKeymap } from "./encounter/encounter-editor-keymap";
-import type { EncounterPartySettings } from "./encounter/encounter-difficulty";
-import { parseEncounterBlock, summarizeEncounterSource } from "./encounter/encounter-parser";
-import { resolveEncounterEntries, type ResolveEncounterResult, type ResolvedEncounterEntry } from "./encounter/encounter-resolver";
-import { EncounterSuggest } from "./encounter/encounter-suggest";
+import { CodeblockRenderChild } from "./encounter/codeblock-render-child";
+import { createCodeblockEditorKeymap } from "./encounter/codeblock-editor-keymap";
+import type { EncounterPartySettings } from "./encounter/codeblock-difficulty";
+import { parseEncounterBlock, summarizeEncounterSource } from "./encounter/codeblock-parser";
+import { resolveEncounterEntries, type ResolveEncounterResult, type ResolvedEncounterEntry } from "./encounter/codeblock-resolver";
+import { CodeblockSuggest } from "./encounter/codeblock-suggest";
 import type { MonsterRecord } from "./monsters/types";
 import { MonsterManager } from "./monsters/monster-manager";
-import { EncounterServer } from "./network/encounter-server";
-import type { EncounterPreviewRow } from "./ui/encounter/encounter-block-widget";
+import { CombatServer } from "./network/combat-server";
+import type { CodeblockRow } from "./ui/encounter/codeblock-widget";
 import { PartySettingsModal } from "./ui/encounter/party-settings-modal";
 import { pickMonsterNameOrCustom, pickMonsterOrCustom } from "./ui/dashboard/add-monster-picker";
-import { DmDashboardView, DM_DASHBOARD_VIEW_TYPE } from "./ui/dashboard/dm-dashboard-view";
+import { DashboardItemView, DASHBOARD_VIEW_TYPE } from "./ui/dashboard/dashboard-item-view";
 import type { DashboardViewModel } from "./ui/dashboard/types";
 import { PreactMount } from "./ui/preact-mount";
 import { CleanupRegistry } from "./utils/cleanup-registry";
@@ -39,7 +40,7 @@ const DEFAULT_SETTINGS: EncounterCastSettings = {
 
 export default class EncounterCastPlugin extends Plugin {
 	private readonly cleanupRegistry = new CleanupRegistry();
-	private readonly encounterServer = new EncounterServer();
+	private readonly encounterServer = new CombatServer();
 	private readonly monsterManager = new MonsterManager(this.app);
 	private preactMount: PreactMount | null = null;
 	private statusBarRoot: HTMLElement | null = null;
@@ -47,7 +48,7 @@ export default class EncounterCastPlugin extends Plugin {
 	private encounterRunning = false;
 	private sourceWriteQueue = Promise.resolve();
 	private settings: EncounterCastSettings = { ...DEFAULT_SETTINGS };
-	private readonly encounterWidgetComponents = new Set<EncounterBlockWidgetComponent>();
+	private readonly encounterWidgetComponents = new Set<CodeblockRenderChild>();
 
 	async onload(): Promise<void> {
 		const loadedSettings: unknown = await this.loadData();
@@ -57,9 +58,9 @@ export default class EncounterCastPlugin extends Plugin {
 		this.preactMount = new PreactMount(this.statusBarRoot);
 
 		this.registerView(
-			DM_DASHBOARD_VIEW_TYPE,
+			DASHBOARD_VIEW_TYPE,
 			(leaf) =>
-				new DmDashboardView(leaf, {
+				new DashboardItemView(leaf, {
 					onStartEncounter: () => {
 						this.startEncounterFromDashboard();
 					},
@@ -185,8 +186,8 @@ export default class EncounterCastPlugin extends Plugin {
 				};
 			});
 			const widgetRoot = el.createDiv();
-			let component: EncounterBlockWidgetComponent;
-			component = new EncounterBlockWidgetComponent(widgetRoot, {
+			let component: CodeblockRenderChild;
+			component = new CodeblockRenderChild(widgetRoot, {
 				title: summary.title,
 				rows,
 				partySettings: {
@@ -223,8 +224,8 @@ export default class EncounterCastPlugin extends Plugin {
 			ctx.addChild(component);
 		});
 
-		this.registerEditorSuggest(new EncounterSuggest(this.app, this.monsterManager));
-		this.registerEditorExtension(createEncounterEditorKeymap());
+		this.registerEditorSuggest(new CodeblockSuggest(this.app, this.monsterManager));
+		this.registerEditorExtension(createCodeblockEditorKeymap());
 
 		const refreshOnResize = () => {
 			this.cleanupRegistry.debounce("status-refresh", 120, () => this.renderFoundationView());
@@ -259,9 +260,9 @@ export default class EncounterCastPlugin extends Plugin {
 
 	private renderDashboardView(): void {
 		const model = this.buildDashboardViewModel();
-		for (const leaf of this.app.workspace.getLeavesOfType(DM_DASHBOARD_VIEW_TYPE)) {
+		for (const leaf of this.app.workspace.getLeavesOfType(DASHBOARD_VIEW_TYPE)) {
 			const view = leaf.view;
-			if (view instanceof DmDashboardView) {
+			if (view instanceof DashboardItemView) {
 				view.update(model);
 			}
 		}
@@ -314,7 +315,7 @@ export default class EncounterCastPlugin extends Plugin {
 				rollInitiative: true,
 				insertByInitiative: true,
 			});
-			this.updateSession(nextSession);
+			this.updateSession(setActiveToTopCombatant(nextSession));
 			this.encounterRunning = true;
 			this.renderDashboardView();
 			await this.openDashboardView();
@@ -338,7 +339,7 @@ export default class EncounterCastPlugin extends Plugin {
 		ctx: MarkdownPostProcessorContext,
 		sectionEl: HTMLElement,
 		title: string | null,
-		rows: EncounterPreviewRow[],
+		rows: CodeblockRow[],
 		sectionInfoHint?: MarkdownSectionInformation | null,
 	): Promise<void> {
 		const file = this.app.vault.getAbstractFileByPath(ctx.sourcePath);
@@ -365,7 +366,7 @@ export default class EncounterCastPlugin extends Plugin {
 		await this.sourceWriteQueue;
 	}
 
-	private serializeEncounterBody(title: string | null, rows: EncounterPreviewRow[]): string {
+	private serializeEncounterBody(title: string | null, rows: CodeblockRow[]): string {
 		const lines: string[] = [];
 		if (title && title.trim().length > 0) {
 			lines.push(title.trim());
@@ -529,7 +530,7 @@ export default class EncounterCastPlugin extends Plugin {
 			return;
 		}
 
-		this.currentSession = rollMonsterInitiative(this.currentSession);
+		this.currentSession = setActiveToTopCombatant(rollMonsterInitiative(this.currentSession));
 		this.encounterRunning = true;
 		this.updateSession(this.currentSession);
 		new Notice("Encounter running.");
@@ -705,10 +706,10 @@ export default class EncounterCastPlugin extends Plugin {
 	}
 
 	private async openDashboardView(): Promise<void> {
-		let leaf = this.app.workspace.getLeavesOfType(DM_DASHBOARD_VIEW_TYPE)[0] ?? null;
+		let leaf = this.app.workspace.getLeavesOfType(DASHBOARD_VIEW_TYPE)[0] ?? null;
 		if (!leaf) {
 			leaf = this.app.workspace.getRightLeaf(false) ?? this.app.workspace.getLeaf(false);
-			await leaf.setViewState({ type: DM_DASHBOARD_VIEW_TYPE, active: true });
+			await leaf.setViewState({ type: DASHBOARD_VIEW_TYPE, active: true });
 		}
 
 		await this.app.workspace.revealLeaf(leaf);
@@ -721,7 +722,11 @@ export default class EncounterCastPlugin extends Plugin {
 			this.encounterServer.setSession(this.currentSession);
 			this.renderFoundationView();
 			this.renderDashboardView();
-			new Notice(`Encounter server started on port ${state.port ?? "?"}.`);
+			const invite = state.inviteUrls[0];
+			const summary = invite
+				? `Encounter server started on port ${state.port ?? "?"}. ${invite}`
+				: `Encounter server started on port ${state.port ?? "?"}.`;
+			new Notice(summary);
 		} catch (error) {
 			const message = error instanceof Error ? error.message : "Failed to start encounter server.";
 			new Notice(message);

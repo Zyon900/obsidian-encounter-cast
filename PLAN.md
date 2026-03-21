@@ -91,7 +91,7 @@
 **Goal:** Responsive, zero-install interface for players.
 * [ ] **Single Page App (Preact):**
     * Bundled into a single JS file served by the internal Express server.
-    * **Join Flow:** Auto-capture `token` from URL; input Name, Max HP, AC.
+    * **Join Flow:** Auto-capture `token` from URL; input Name, HP, Max HP, temp HP, AC.
     * **Combat HUD:** Real-time turn order list broadcast from the DM.
     * **Interactive Prompts:** Modals for Initiative rolls that relay results back to the DM.
 * [ ] **State Sync:** Implement WebSocket event handlers (`state_sync`, `player_update`, `prompt_init`) on top of the Phase 4 `CombatState` model.

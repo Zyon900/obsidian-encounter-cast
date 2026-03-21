@@ -1,6 +1,6 @@
 import type { MonsterManager } from "../monsters/monster-manager";
 import type { MonsterRecord } from "../monsters/types";
-import type { EncounterEntry } from "./encounter-parser";
+import type { EncounterEntry } from "./codeblock-parser";
 
 export interface ResolvedEncounterEntry {
 	entry: EncounterEntry;

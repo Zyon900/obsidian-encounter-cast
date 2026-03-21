@@ -19,7 +19,7 @@ interface EncounterLineTrigger {
 
 const ENCOUNTER_QUERY_PATTERN = /^(\s*\d+\s*x\s+)([^'\n]*)$/i;
 
-export class EncounterSuggest extends EditorSuggest<MonsterSearchHit> {
+export class CodeblockSuggest extends EditorSuggest<MonsterSearchHit> {
 	private readonly monsterManager: MonsterManager;
 
 	constructor(app: App, monsterManager: MonsterManager) {
@@ -132,5 +132,4 @@ export class EncounterSuggest extends EditorSuggest<MonsterSearchHit> {
 		return inEncounterFence;
 	}
 }
-
 

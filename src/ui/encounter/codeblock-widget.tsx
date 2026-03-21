@@ -4,11 +4,11 @@ import {
 	computeEncounterDifficulty,
 	computeEncounterTotalXp,
 	type EncounterPartySettings
-} from "../../encounter/encounter-difficulty";
+} from "../../encounter/codeblock-difficulty";
 import type { MonsterRecord } from "../../monsters/types";
 import { MonsterHoverPreviewTrigger } from "../monsters/monster-hover-preview-trigger";
 
-export interface EncounterPreviewRow {
+export interface CodeblockRow {
 	id: string;
 	quantity: number;
 	customName: string | null;
@@ -20,17 +20,17 @@ export interface EncounterPreviewRow {
 	monster: MonsterRecord | null;
 }
 
-interface EncounterBlockWidgetProps {
+interface CodeblockWidgetProps {
 	title: string | null;
-	rows: EncounterPreviewRow[];
+	rows: CodeblockRow[];
 	partySettings: EncounterPartySettings;
 	onInfo: (monster: MonsterRecord) => void;
 	onHoverInfo: (monster: MonsterRecord, anchorEl: HTMLElement) => void;
 	onHoverLeave: () => void;
-	onRowsChange: (rows: EncounterPreviewRow[], title: string | null) => void;
-	onTitleChange: (rows: EncounterPreviewRow[], title: string | null) => void;
-	onRunEncounter: (rows: EncounterPreviewRow[], title: string | null) => void;
-	onAddToEncounter: (rows: EncounterPreviewRow[], title: string | null) => void;
+	onRowsChange: (rows: CodeblockRow[], title: string | null) => void;
+	onTitleChange: (rows: CodeblockRow[], title: string | null) => void;
+	onRunEncounter: (rows: CodeblockRow[], title: string | null) => void;
+	onAddToEncounter: (rows: CodeblockRow[], title: string | null) => void;
 	onSelectMonsterForCodeblock: () => Promise<string | null>;
 }
 
@@ -38,17 +38,17 @@ interface EncounterBlockWidgetProps {
 // This component is the UI source of truth while rendered:
 // - local state tracks transient edits (title, row quantities, hover timers)
 // - callbacks persist those edits back into the underlying markdown source
-export function EncounterBlockWidget(props: EncounterBlockWidgetProps) {
+export function CodeblockWidget(props: CodeblockWidgetProps) {
 	// Local UI state is seeded from parsed codeblock data and kept in sync via effects.
-	const [rows, setRows] = useState<EncounterPreviewRow[]>(props.rows);
+	const [rows, setRows] = useState<CodeblockRow[]>(props.rows);
 	const [title, setTitle] = useState<string | null>(props.title);
 	const [titleDraft, setTitleDraft] = useState(props.title ?? "");
 	const [isEditingTitle, setIsEditingTitle] = useState(false);
 	const titleInputRef = useRef<HTMLInputElement | null>(null);
 
 	// Display helpers normalize how names and CR/XP are shown across row variants.
-	const getDisplayName = (row: EncounterPreviewRow) => row.customName ?? row.monsterName;
-	const getCrLabel = (row: EncounterPreviewRow) => {
+	const getDisplayName = (row: CodeblockRow) => row.customName ?? row.monsterName;
+	const getCrLabel = (row: CodeblockRow) => {
 		const cr = row.challenge ?? "-";
 		if (row.xp === null) {
 			return `CR ${cr}`;
@@ -107,7 +107,7 @@ export function EncounterBlockWidget(props: EncounterBlockWidgetProps) {
 		setRows((currentRows) => {
 			const timestamp = Date.now();
 			const suffix = Math.random().toString(36).slice(2, 8);
-			const row: EncounterPreviewRow = {
+			const row: CodeblockRow = {
 				id: `unresolved-manual-${timestamp}-${suffix}`,
 				quantity: 1,
 				customName: null,
@@ -310,4 +310,3 @@ function EncounterActionIcon({ name }: { name: string }) {
 	const className = `encounter-cast-encounter-action-icon${name === "play" ? " is-play" : ""}`;
 	return <span ref={iconRef} className={className} aria-hidden="true" />;
 }
-
