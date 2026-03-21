@@ -249,6 +249,97 @@ export function rollCombatantInitiative(session: CombatSession, combatantId: str
 	});
 }
 
+export function setCombatantInitiative(
+	session: CombatSession,
+	combatantId: string,
+	initiativeTotal: number | null,
+): CombatSession {
+	const sourceIndex = session.combatants.findIndex((combatant) => combatant.id === combatantId);
+	if (sourceIndex === -1) {
+		return session;
+	}
+
+	const target = session.combatants[sourceIndex];
+	if (!target) {
+		return session;
+	}
+
+	const combatants = session.combatants.slice();
+	combatants[sourceIndex] = {
+		...target,
+		initiative: initiativeTotal === null ? null : Math.max(1, Math.trunc(initiativeTotal)),
+		initiativeRoll: null,
+		initiativeCriticalFailure: false,
+	};
+	const sorted = sortCombatantsByInitiative(combatants);
+	const activeId = session.combatants[session.activeIndex]?.id ?? null;
+	const activeIndex = activeId ? Math.max(0, sorted.findIndex((combatant) => combatant.id === activeId)) : 0;
+	return stamp({
+		...session,
+		activeIndex,
+		combatants: sorted,
+	});
+}
+
+export function upsertPlayerCombatant(session: CombatSession, playerId: string, playerName: string): CombatSession {
+	const existing = session.combatants.find((combatant) => combatant.monster.id === `player::${playerId}`);
+	if (existing) {
+		if (existing.name === playerName && existing.monsterName === playerName) {
+			return session;
+		}
+		return updateCombatant(session, existing.id, (combatant) => ({
+			...combatant,
+			name: playerName,
+			monsterName: playerName,
+			monster: {
+				...combatant.monster,
+				name: playerName,
+				slug: playerName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, ""),
+			},
+		}));
+	}
+
+	const slug = playerName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || "player";
+	const playerMonster: MonsterRecord = {
+		id: `player::${playerId}`,
+		name: playerName,
+		challenge: null,
+		xp: null,
+		hp: null,
+		max_hp: null,
+		ac: null,
+		dex_mod: 0,
+		damage_vulnerabilities: [],
+		damage_resistances: [],
+		damage_immunities: [],
+		condition_immunities: [],
+		source: null,
+		slug,
+	};
+
+	const combatant: Combatant = {
+		id: `combatant-player-${playerId}`,
+		name: playerName,
+		monsterName: playerName,
+		isPlayer: true,
+		challenge: null,
+		hpCurrent: null,
+		hpMax: null,
+		tempHp: 0,
+		ac: null,
+		dexMod: 0,
+		initiative: null,
+		initiativeRoll: null,
+		initiativeCriticalFailure: false,
+		monster: playerMonster,
+	};
+
+	return stamp({
+		...session,
+		combatants: session.combatants.concat(combatant),
+	});
+}
+
 function updateCombatant(
 	session: CombatSession,
 	combatantId: string,

@@ -421,7 +421,15 @@ function InitiativeDie({
 }
 
 // AC display glyph and value.
-function ArmorClassShield({ armorClass, onCommit }: { armorClass: number | null; onCommit: (value: string) => void }) {
+function ArmorClassShield({
+	armorClass,
+	isEditable = true,
+	onCommit,
+}: {
+	armorClass: number | null;
+	isEditable?: boolean;
+	onCommit: (value: string) => void;
+}) {
 	const [isEditing, setIsEditing] = useState(false);
 	const [draftValue, setDraftValue] = useState("");
 	const inputRef = useRef<HTMLInputElement | null>(null);
@@ -437,6 +445,9 @@ function ArmorClassShield({ armorClass, onCommit }: { armorClass: number | null;
 	}, [isEditing]);
 
 	const startEdit = () => {
+		if (!isEditable) {
+			return;
+		}
 		setDraftValue(armorClass === null ? "" : armorClass.toString());
 		setIsEditing(true);
 	};
@@ -453,13 +464,16 @@ function ArmorClassShield({ armorClass, onCommit }: { armorClass: number | null;
 
 	return (
 		<span
-			className="encounter-cast-ac-shield is-editable"
-			title="Armor class (double-click to edit)"
+			className={`encounter-cast-ac-shield ${isEditable ? "is-editable" : ""}`.trim()}
+			title={isEditable ? "Armor class (double-click to edit)" : "Armor class"}
 			onDblClick={startEdit}
-			role="button"
-			tabIndex={0}
-			aria-label="Edit armor class"
+			role={isEditable ? "button" : undefined}
+			tabIndex={isEditable ? 0 : undefined}
+			aria-label={isEditable ? "Edit armor class" : undefined}
 			onKeyDown={(event) => {
+				if (!isEditable) {
+					return;
+				}
 				if (event.key === "Enter" || event.key === " ") {
 					event.preventDefault();
 					startEdit();
@@ -619,6 +633,7 @@ function CombatantRow({
 	onDropOn,
 	onDragTarget,
 }: CombatantRowProps) {
+	const isPlayerCombatant = combatant.monster.id.startsWith("player::");
 	const showInfoButton = !combatant.monster.id.startsWith("unresolved::");
 	const initiativeDisplay = encounterRunning
 		? (combatant.initiative?.toString() ?? "-")
@@ -678,7 +693,7 @@ function CombatantRow({
 					title={initiativeTitle}
 					isCriticalFailure={encounterRunning && combatant.initiativeCriticalFailure}
 					isCriticalSuccess={encounterRunning && combatant.initiativeRoll === 20}
-					isEditable={!encounterRunning}
+					isEditable={!encounterRunning && !isPlayerCombatant}
 					editableValue={combatant.dexMod}
 					onCommit={(value) => actions.onSetDexMod(combatant.id, value)}
 				/>
@@ -699,7 +714,11 @@ function CombatantRow({
 					<span className="encounter-cast-combatant-drag-dot-column" />
 					<span className="encounter-cast-combatant-drag-dot-column" />
 				</div>
-				<ArmorClassShield armorClass={combatant.ac} onCommit={(value) => actions.onSetAc(combatant.id, value)} />
+				<ArmorClassShield
+					armorClass={combatant.ac}
+					isEditable={!isPlayerCombatant}
+					onCommit={(value) => actions.onSetAc(combatant.id, value)}
+				/>
 				<div className="encounter-cast-combatant-hp-fields">
 					<label>
 						<span>HP</span>
@@ -707,6 +726,7 @@ function CombatantRow({
 							type="number"
 							value={combatant.hpCurrent ?? ""}
 							placeholder="-"
+							disabled={isPlayerCombatant}
 							onInput={(event) => actions.onSetHp(combatant.id, event.currentTarget.value)}
 						/>
 					</label>
@@ -716,6 +736,7 @@ function CombatantRow({
 							type="number"
 							value={combatant.hpMax ?? ""}
 							placeholder="-"
+							disabled={isPlayerCombatant}
 							onInput={(event) => actions.onSetHpMax(combatant.id, event.currentTarget.value)}
 						/>
 					</label>
@@ -725,6 +746,7 @@ function CombatantRow({
 							type="number"
 							value={combatant.tempHp}
 							placeholder="0"
+							disabled={isPlayerCombatant}
 							onInput={(event) => actions.onSetTempHp(combatant.id, event.currentTarget.value)}
 						/>
 					</label>
@@ -769,7 +791,6 @@ function MonsterInfoButton({ onClick }: { onClick: () => void }) {
 		</button>
 	);
 }
-
 
 
 

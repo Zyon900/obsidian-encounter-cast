@@ -23,6 +23,7 @@ import { CodeblockSuggest } from "./encounter/codeblock-suggest";
 import type { MonsterRecord } from "./monsters/types";
 import { MonsterManager } from "./monsters/monster-manager";
 import { CombatServer } from "./network/combat-server";
+import type { PlayerTheme } from "./network/player-events";
 import type { CodeblockRow } from "./ui/encounter/codeblock-widget";
 import { PartySettingsModal } from "./ui/encounter/party-settings-modal";
 import { pickMonsterNameOrCustom, pickMonsterOrCustom } from "./ui/dashboard/add-monster-picker";
@@ -122,6 +123,15 @@ export default class EncounterCastPlugin extends Plugin {
 		);
 
 		await this.monsterManager.initialize();
+		this.encounterServer.setOnSessionChange((session) => {
+			this.currentSession = session;
+			if (!session) {
+				this.encounterRunning = false;
+			}
+			this.renderFoundationView();
+			this.renderDashboardView();
+		});
+		this.encounterServer.setEncounterRunning(this.encounterRunning);
 		this.renderFoundationView();
 		this.renderDashboardView();
 		this.maybeNotifyMonsterState();
@@ -315,8 +325,8 @@ export default class EncounterCastPlugin extends Plugin {
 				rollInitiative: true,
 				insertByInitiative: true,
 			});
-			this.updateSession(setActiveToTopCombatant(nextSession));
 			this.encounterRunning = true;
+			this.updateSession(setActiveToTopCombatant(nextSession));
 			this.renderDashboardView();
 			await this.openDashboardView();
 			new Notice(`Encounter started. ${totalCreatures} monsters loaded.`);
@@ -511,6 +521,7 @@ export default class EncounterCastPlugin extends Plugin {
 		if (!session) {
 			this.encounterRunning = false;
 		}
+		this.encounterServer.setEncounterRunning(this.encounterRunning);
 		this.encounterServer.setSession(session);
 		this.renderFoundationView();
 		this.renderDashboardView();
@@ -542,6 +553,7 @@ export default class EncounterCastPlugin extends Plugin {
 		}
 
 		this.encounterRunning = false;
+		this.encounterServer.setEncounterRunning(false);
 		this.renderDashboardView();
 		new Notice("Encounter stopped.");
 	}
@@ -719,6 +731,8 @@ export default class EncounterCastPlugin extends Plugin {
 	private async startEncounterServer(): Promise<void> {
 		try {
 			const state = await this.encounterServer.start();
+			this.encounterServer.setTheme(this.captureTheme());
+			this.encounterServer.setEncounterRunning(this.encounterRunning);
 			this.encounterServer.setSession(this.currentSession);
 			this.renderFoundationView();
 			this.renderDashboardView();
@@ -804,6 +818,32 @@ export default class EncounterCastPlugin extends Plugin {
 
 	private closeMonsterHoverInfo(): void {
 		this.monsterManager.scheduleHideCreatureHoverPreview(500);
+	}
+
+	private captureTheme(): PlayerTheme | null {
+		if (typeof document === "undefined") {
+			return null;
+		}
+
+		const rootStyles = window.getComputedStyle(document.documentElement);
+		const bodyStyles = document.body ? window.getComputedStyle(document.body) : null;
+		const read = (name: string, fallback: string) => {
+			const bodyValue = bodyStyles?.getPropertyValue(name).trim() ?? "";
+			if (bodyValue.length) {
+				return bodyValue;
+			}
+			const rootValue = rootStyles.getPropertyValue(name).trim();
+			return rootValue.length ? rootValue : fallback;
+		};
+
+		return {
+			backgroundPrimary: read("--background-primary", "#1f1f1f"),
+			backgroundSecondary: read("--background-secondary", "#2a2a2a"),
+			textNormal: read("--text-normal", "#e8e8e8"),
+			textMuted: read("--text-muted", "#aaaaaa"),
+			interactiveAccent: read("--interactive-accent", "#5ea6ff"),
+			border: read("--background-modifier-border", "#3a3a3a"),
+		};
 	}
 }
 
