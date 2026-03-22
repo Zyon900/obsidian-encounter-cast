@@ -53,6 +53,7 @@ export function DashboardPanel({ model, actions }: DashboardPanelProps) {
 	const previousCombatantRects = useRef(new Map<string, DOMRect>());
 	const suppressAnimationRef = useRef(true);
 	const previousOrderKeyRef = useRef("");
+	const previousActiveCombatantIdRef = useRef<string | null>(null);
 	const primaryInvite = model.inviteUrls[0] ?? null;
 	const session = model.session;
 	const canControlTurns = Boolean(session && model.encounterRunning && session.combatants.length > 0);
@@ -145,6 +146,7 @@ export function DashboardPanel({ model, actions }: DashboardPanelProps) {
 	}, []);
 
 	const combatantOrderKey = session?.combatants.map((combatant) => combatant.id).join("|") ?? "";
+	const activeCombatantId = session?.combatants[session.activeIndex]?.id ?? null;
 	// This effect drives row layout behavior in three steps:
 	// 1) Read current row rects and wrapped-state from the DOM.
 	// 2) Update wrapped classes only when the state actually changed.
@@ -219,6 +221,28 @@ export function DashboardPanel({ model, actions }: DashboardPanelProps) {
 		previousCombatantRects.current = nextRects;
 		previousOrderKeyRef.current = combatantOrderKey;
 	}, [combatantOrderKey, session, layoutTick]);
+
+	useEffect(() => {
+		if (!activeCombatantId) {
+			previousActiveCombatantIdRef.current = null;
+			return;
+		}
+		if (previousActiveCombatantIdRef.current === activeCombatantId) {
+			return;
+		}
+
+		previousActiveCombatantIdRef.current = activeCombatantId;
+		const row = combatantRowRefs.current.get(activeCombatantId);
+		if (!row) {
+			return;
+		}
+
+		row.scrollIntoView({
+			block: "nearest",
+			inline: "nearest",
+			behavior: "smooth",
+		});
+	}, [activeCombatantId]);
 
 	// Render branch: either active combatants or an empty-state hint.
 	// Toolbar is always shown so encounter controls remain reachable.
@@ -791,7 +815,6 @@ function MonsterInfoButton({ onClick }: { onClick: () => void }) {
 		</button>
 	);
 }
-
 
 
 

@@ -45,6 +45,7 @@ export class CombatServer {
 	private activeSession: CombatSession | null = null;
 	private encounterRunning = false;
 	private theme: PlayerTheme | null = null;
+	private supportUrl: string | null = null;
 	private readonly players = new Map<PlayerId, PlayerPresenceState>();
 	private readonly sseClients = new Map<PlayerId, Set<ServerResponse>>();
 	private onSessionChange: ((session: CombatSession | null) => void) | null = null;
@@ -131,6 +132,10 @@ export class CombatServer {
 	setTheme(theme: PlayerTheme | null): void {
 		this.theme = theme;
 		this.emitStateSyncToAllPlayers();
+	}
+
+	setSupportUrl(url: string | null): void {
+		this.supportUrl = url;
 	}
 
 	setOnSessionChange(callback: ((session: CombatSession | null) => void) | null): void {
@@ -570,10 +575,13 @@ export class CombatServer {
 			backgroundSecondary: "#2a2a2a",
 			textNormal: "#e8e8e8",
 			textMuted: "#aaaaaa",
+			textError: "#e05a5a",
 			interactiveAccent: "#5ea6ff",
 			textOnAccent: "#ffffff",
 			border: "#3a3a3a",
 		};
+
+		const supportUrlJson = JSON.stringify(this.supportUrl ?? "");
 
 		return `<!doctype html>
 <html lang="en">
@@ -677,13 +685,14 @@ export class CombatServer {
       inset: 0;
       width: 100%;
       height: 100%;
-      fill: ${theme.backgroundPrimary};
-      stroke: ${theme.border};
+      fill: ${theme.interactiveAccent};
+      stroke: ${theme.interactiveAccent};
       stroke-width: 1.4;
     }
     .initiative span {
       position: relative;
       z-index: 1;
+      color: ${theme.textOnAccent};
     }
     .name-block {
       min-width: 0;
@@ -717,6 +726,8 @@ export class CombatServer {
       align-items: center;
       gap: 8px;
       flex: 0 0 auto;
+      margin-left: auto;
+      justify-content: flex-end;
     }
     .shield {
       position: relative;
@@ -734,13 +745,14 @@ export class CombatServer {
       inset: 0;
       width: 100%;
       height: 100%;
-      fill: ${theme.backgroundPrimary};
-      stroke: ${theme.border};
+      fill: ${theme.interactiveAccent};
+      stroke: ${theme.interactiveAccent};
       stroke-width: 1.4;
     }
     .shield span {
       position: relative;
       z-index: 1;
+      color: ${theme.textOnAccent};
     }
     .shield.placeholder {
       opacity: 0;
@@ -770,6 +782,38 @@ export class CombatServer {
     }
     .stat-chip .icon {
       opacity: 0.9;
+    }
+    .self-health {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: ${theme.textError};
+      font-size: 15px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .heart-badge {
+      position: relative;
+      width: 40px;
+      height: 40px;
+      flex: 0 0 40px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .heart-badge svg {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      fill: ${theme.backgroundPrimary};
+      stroke: ${theme.textError};
+      stroke-width: 1.5;
+    }
+    .self-health-temp {
+      margin-left: 4px;
+      font-size: 14px;
+      font-weight: 700;
     }
     .sheet {
       position: fixed;
@@ -837,22 +881,83 @@ export class CombatServer {
       padding: 0 4px;
     }
     .sheet-panel {
-      display: none;
-      margin-top: 8px;
+      max-height: 0;
+      opacity: 0;
+      transform: translateY(8px);
+      overflow: hidden;
+      pointer-events: none;
+      margin-top: 0;
+      transition:
+        max-height 220ms cubic-bezier(0.2, 0, 0, 1),
+        opacity 170ms ease,
+        transform 220ms cubic-bezier(0.2, 0, 0, 1),
+        margin-top 220ms cubic-bezier(0.2, 0, 0, 1);
     }
     .sheet-panel.open {
-      display: block;
+      max-height: 420px;
+      opacity: 1;
+      transform: translateY(0);
+      pointer-events: auto;
+      margin-top: 8px;
+    }
+    .sheet-panel .sheet-grid,
+    .sheet-panel label {
+      opacity: 0;
+      transform: translateY(4px);
+      transition: opacity 160ms ease, transform 220ms cubic-bezier(0.2, 0, 0, 1);
+    }
+    .sheet-panel.open .sheet-grid,
+    .sheet-panel.open label {
+      opacity: 1;
+      transform: translateY(0);
     }
     .sheet-summary {
-      color: ${theme.textMuted};
-      font-size: 12px;
+      color: ${theme.textNormal};
+      font-size: 13px;
       margin-bottom: 2px;
       display: flex;
-      gap: 6px;
+      gap: 8px;
+      align-items: center;
       flex-wrap: wrap;
     }
     .sheet-summary.is-hidden {
       display: none;
+    }
+    .sheet-summary-shield,
+    .sheet-summary-heart {
+      position: relative;
+      width: 40px;
+      height: 40px;
+      flex: 0 0 40px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 15px;
+    }
+    .sheet-summary-shield svg,
+    .sheet-summary-heart svg {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      fill: ${theme.backgroundPrimary};
+      stroke: ${theme.border};
+      stroke-width: 1.4;
+    }
+    .sheet-summary-shield span,
+    .sheet-summary-heart span {
+      position: relative;
+      z-index: 1;
+    }
+    .sheet-summary-hp {
+      font-weight: 700;
+      letter-spacing: 0.01em;
+    }
+    .sheet-summary-temp {
+      color: ${theme.textMuted};
+      margin-left: 4px;
+      font-weight: 600;
     }
     .sheet-turn-cta {
       max-height: 0;
@@ -911,6 +1016,36 @@ export class CombatServer {
       width: 100%;
       font-size: 15px;
       font-weight: 600;
+    }
+    .shutdown-screen {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      box-sizing: border-box;
+      text-align: center;
+    }
+    .shutdown-card {
+      border: 1px solid ${theme.border};
+      border-radius: 14px;
+      background: ${theme.backgroundSecondary};
+      padding: 18px 16px;
+      max-width: 520px;
+      width: 100%;
+    }
+    .shutdown-card h2 {
+      margin: 0 0 10px;
+      font-size: 24px;
+    }
+    .shutdown-card p {
+      margin: 0;
+      color: ${theme.textMuted};
+      font-size: 13px;
+    }
+    .shutdown-card a {
+      color: ${theme.textMuted};
+      text-decoration: underline;
     }
     .initiative-roll-toggle {
       display: grid;
@@ -997,6 +1132,9 @@ export class CombatServer {
       .sheet-summary {
         font-size: 13px;
       }
+      .sheet-panel.open {
+        max-height: 520px;
+      }
       .initiative-gate-card {
         padding: 18px;
       }
@@ -1075,7 +1213,12 @@ export class CombatServer {
       </div>
     </div>
     <div class="sheet-header">
-      <div id="sheetSummary" class="sheet-summary"><span class="stat-chip"><span class="icon">&#9829;</span><span>-/-</span></span><span class="stat-chip"><span class="icon">&#10022;</span><span>+0</span></span></div>
+      <div id="sheetSummary" class="sheet-summary">
+        <span class="sheet-summary-shield"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 2C18.4 3.5 21 4.8 27.4 7.1V15.8C27.4 22 23.2 27 16 30C8.8 27 4.6 22 4.6 15.8V7.1C11 4.8 13.6 3.5 16 2Z"></path></svg><span>-</span></span>
+        <span class="sheet-summary-heart"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 28C10.4 24.3 5.2 19.5 5.2 13.3C5.2 9.4 8.2 6.4 12.1 6.4C13.7 6.4 15.1 6.9 16 7.9C16.9 6.9 18.3 6.4 19.9 6.4C23.8 6.4 26.8 9.4 26.8 13.3C26.8 19.5 21.6 24.3 16 28Z"></path></svg><span></span></span>
+        <span class="sheet-summary-hp">-/-</span>
+        <span class="sheet-summary-temp">+0</span>
+      </div>
     </div>
     <div id="damagePanel" class="sheet-panel">
       <div class="sheet-grid">
@@ -1124,6 +1267,7 @@ export class CombatServer {
     const sheetDamage = document.getElementById("sheetDamage");
     const sheetTurnCta = document.getElementById("sheetTurnCta");
     const endRoundBtn = document.getElementById("endRoundBtn");
+    const supportUrl = ${supportUrlJson};
     let playerId = localStorage.getItem("encounter-cast-player-id") || "";
     let stream = null;
     let serverShutDown = false;
@@ -1131,6 +1275,9 @@ export class CombatServer {
     let sheetMode = "none";
     let initiativeGateOpen = false;
     let initiativeRollType = "normal";
+    let lastActiveCombatantId = null;
+    let previousCombatantOrderKey = "";
+    let hasRenderedCombatants = false;
 
     async function api(path, method = "GET", body) {
       const url = path + (path.includes("?") ? "&" : "?") + "token=" + encodeURIComponent(token);
@@ -1168,6 +1315,32 @@ export class CombatServer {
       return "hp-label is-" + String(label).replaceAll(" ", "-");
     }
 
+    function escText(value) {
+      return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;");
+    }
+
+    function escAttr(value) {
+      return escText(value).replaceAll('"', "&quot;").replaceAll("'", "&#039;");
+    }
+
+    function renderShutdownScreen() {
+      const supportCopyPrefix = "If you enjoyed this plugin, consider supporting the author by ";
+      const supportCopyLink = "buying him a coffee!";
+      const supportCopyFallback = "If you enjoyed this plugin, consider supporting the author by buying him a coffee!";
+      const supportLine = supportUrl
+        ? supportCopyPrefix + "<a href='" + escAttr(supportUrl) + "' target='_blank' rel='noopener noreferrer'>" + supportCopyLink + "</a>"
+        : supportCopyFallback;
+
+      document.body.innerHTML =
+        "<div class='shutdown-screen'><div class='shutdown-card'>" +
+          "<h2>Thanks for playing!</h2>" +
+          "<p>" + supportLine + "</p>" +
+        "</div></div>";
+    }
+
     function setSheetMode(mode) {
       sheetMode = mode;
       const isEdit = mode === "edit";
@@ -1186,13 +1359,24 @@ export class CombatServer {
         setTimeout(() => {
           sheetDamage.focus();
           sheetDamage.select();
+          ensureDamageActionVisible();
         }, 20);
+        setTimeout(() => {
+          ensureDamageActionVisible();
+        }, 220);
+        setTimeout(() => {
+          ensureDamageActionVisible();
+        }, 420);
       }
     }
 
     function setSheetFromSelf(self) {
       if (!self) {
-        sheetSummary.innerHTML = "<span class='stat-chip'><span class='icon'>&#9829;</span><span>-/-</span></span><span class='stat-chip'><span class='icon'>&#10022;</span><span>+0</span></span>";
+        sheetSummary.innerHTML =
+          "<span class='sheet-summary-shield'><svg viewBox='0 0 32 32' aria-hidden='true'><path d='M16 2C18.4 3.5 21 4.8 27.4 7.1V15.8C27.4 22 23.2 27 16 30C8.8 27 4.6 22 4.6 15.8V7.1C11 4.8 13.6 3.5 16 2Z'></path></svg><span>-</span></span>" +
+          "<span class='sheet-summary-heart'><svg viewBox='0 0 32 32' aria-hidden='true'><path d='M16 28C10.4 24.3 5.2 19.5 5.2 13.3C5.2 9.4 8.2 6.4 12.1 6.4C13.7 6.4 15.1 6.9 16 7.9C16.9 6.9 18.3 6.4 19.9 6.4C23.8 6.4 26.8 9.4 26.8 13.3C26.8 19.5 21.6 24.3 16 28Z'></path></svg><span></span></span>" +
+          "<span class='sheet-summary-hp'>-/-</span>" +
+          "<span class='sheet-summary-temp'>+0</span>";
         sheetAc.value = "";
         sheetHp.value = "";
         sheetHpMax.value = "";
@@ -1203,8 +1387,10 @@ export class CombatServer {
         return;
       }
       sheetSummary.innerHTML =
-        "<span class='stat-chip'><span class='icon'>&#9829;</span><span>" + esc(self.hpCurrent ?? "-") + "/" + esc(self.hpMax ?? "-") + "</span></span>" +
-        "<span class='stat-chip'><span class='icon'>&#10022;</span><span>+" + esc(self.tempHp ?? 0) + "</span></span>";
+        "<span class='sheet-summary-shield'><svg viewBox='0 0 32 32' aria-hidden='true'><path d='M16 2C18.4 3.5 21 4.8 27.4 7.1V15.8C27.4 22 23.2 27 16 30C8.8 27 4.6 22 4.6 15.8V7.1C11 4.8 13.6 3.5 16 2Z'></path></svg><span>" + esc(self.ac ?? "-") + "</span></span>" +
+        "<span class='sheet-summary-heart'><svg viewBox='0 0 32 32' aria-hidden='true'><path d='M16 28C10.4 24.3 5.2 19.5 5.2 13.3C5.2 9.4 8.2 6.4 12.1 6.4C13.7 6.4 15.1 6.9 16 7.9C16.9 6.9 18.3 6.4 19.9 6.4C23.8 6.4 26.8 9.4 26.8 13.3C26.8 19.5 21.6 24.3 16 28Z'></path></svg><span></span></span>" +
+        "<span class='sheet-summary-hp'>" + esc(self.hpCurrent ?? "-") + "/" + esc(self.hpMax ?? "-") + "</span>" +
+        "<span class='sheet-summary-temp'>+" + esc(self.tempHp ?? 0) + "</span>";
       sheetAc.value = self.ac ?? "";
       sheetHp.value = self.hpCurrent ?? "";
       sheetHpMax.value = self.hpMax ?? "";
@@ -1279,6 +1465,41 @@ export class CombatServer {
       initiativeNat20Btn.classList.toggle("is-active", nextType === "nat20");
     }
 
+    function scrollRowIntoVisibleArea(row) {
+      const rowRect = row.getBoundingClientRect();
+      const sheetInset = sheetRoot && sheetRoot.style.display !== "none" ? sheetRoot.offsetHeight : 0;
+      const topLimit = 8;
+      const bottomLimit = window.innerHeight - sheetInset - 8;
+
+      if (rowRect.bottom > bottomLimit) {
+        window.scrollBy({ top: rowRect.bottom - bottomLimit, behavior: "smooth" });
+        return;
+      }
+      if (rowRect.top < topLimit) {
+        window.scrollBy({ top: rowRect.top - topLimit, behavior: "smooth" });
+      }
+    }
+
+    function ensureDamageActionVisible() {
+      if (sheetMode !== "damage") {
+        return;
+      }
+      const viewportBottom = window.visualViewport
+        ? window.visualViewport.offsetTop + window.visualViewport.height
+        : window.innerHeight;
+      const buttonRect = damageModeBtn.getBoundingClientRect();
+      const isTouchLike = window.matchMedia && window.matchMedia("(pointer: coarse)").matches;
+      const keyboardAccessoryGuard = window.visualViewport && isTouchLike ? 62 : 0;
+      const bottomPadding = 10 + keyboardAccessoryGuard;
+      const safeBottom = viewportBottom - bottomPadding;
+      if (buttonRect.bottom > safeBottom) {
+        window.scrollBy({
+          top: buttonRect.bottom - safeBottom,
+          behavior: "smooth",
+        });
+      }
+    }
+
     function openInitiativeGate() {
       if (initiativeGateOpen) return;
       initiativeGateOpen = true;
@@ -1317,6 +1538,21 @@ export class CombatServer {
         closeInitiativeGate();
       }
 
+      const previousElements = new Map();
+      const previousRects = new Map();
+      for (const node of listEl.children) {
+        if (!(node instanceof HTMLElement)) {
+          continue;
+        }
+        const id = node.dataset.combatantId;
+        if (!id) {
+          continue;
+        }
+        previousElements.set(id, node);
+        previousRects.set(id, node.getBoundingClientRect());
+      }
+      const previousIds = new Set(previousElements.keys());
+
       listEl.innerHTML = "";
       for (const c of ps.combatants) {
         const el = document.createElement("div");
@@ -1324,22 +1560,127 @@ export class CombatServer {
         const isMonster = c.isPlayer !== true;
         const isSelf = c.isSelf === true;
         const showAc = isSelf || c.isPlayer;
-        const hpText = isSelf
-          ? "<div class='stats'>" +
-              "<span class='stat-chip'><span class='icon'>&#9829;</span><span>" + esc(c.hpCurrent ?? "-") + "/" + esc(c.hpMax ?? "-") + "</span></span>" +
-              "<span class='stat-chip'><span class='icon'>&#10022;</span><span>+" + esc(c.tempHp ?? 0) + "</span></span>" +
-            "</div>"
-          : "<div class='" + hpClass(c.hpLabel) + "'>" + esc(c.hpLabel) + "</div>";
+        const hpText = "<div class='" + hpClass(c.hpLabel) + "'>" + esc(c.hpLabel) + "</div>";
+        const selfHealth = isSelf
+          ? "<span class='self-health'>" +
+              "<span class='heart-badge'><svg viewBox='0 0 32 32' aria-hidden='true'><path d='M16 28C10.4 24.3 5.2 19.5 5.2 13.3C5.2 9.4 8.2 6.4 12.1 6.4C13.7 6.4 15.1 6.9 16 7.9C16.9 6.9 18.3 6.4 19.9 6.4C23.8 6.4 26.8 9.4 26.8 13.3C26.8 19.5 21.6 24.3 16 28Z'></path></svg></span>" +
+              "<span>" + esc(c.hpCurrent ?? "-") + "/" + esc(c.hpMax ?? "-") + "</span>" +
+              "<span class='self-health-temp'>+" + esc(c.tempHp ?? 0) + "</span>" +
+            "</span>"
+          : "";
         el.className = "combatant" + (c.id === active ? " active" : "") + (isSelf ? " is-self" : "") + (yourTurn ? " is-your-turn" : "");
+        el.dataset.combatantId = c.id;
         el.innerHTML =
           initiativeMarkup(c.initiative ?? "-") +
           "<div class='name-block'><div class='name'>" + esc(c.name) + "</div>" + hpText + "</div>" +
           "<div class='tail'>" +
+            selfHealth +
             (showAc ? shieldMarkup(c.ac ?? "-", false) : shieldMarkup("-", true)) +
             (isMonster ? "<span class='subtle'>monster</span>" : "") +
           "</div>";
         listEl.appendChild(el);
       }
+      const nextOrderKey = ps.combatants.map((combatant) => combatant.id).join("|");
+      const orderChanged = hasRenderedCombatants && previousCombatantOrderKey !== nextOrderKey;
+      const nextRects = new Map();
+      for (const node of listEl.children) {
+        if (!(node instanceof HTMLElement)) {
+          continue;
+        }
+        const id = node.dataset.combatantId;
+        if (!id) {
+          continue;
+        }
+        nextRects.set(id, node.getBoundingClientRect());
+      }
+
+      for (const node of listEl.children) {
+        if (!(node instanceof HTMLElement)) {
+          continue;
+        }
+        const id = node.dataset.combatantId;
+        if (!id) {
+          continue;
+        }
+        const previousRect = previousRects.get(id);
+        if (!previousRect) {
+          if (hasRenderedCombatants) {
+            node.animate(
+              [
+                { opacity: 0, transform: "translateY(8px) scale(0.985)" },
+                { opacity: 1, transform: "translateY(0) scale(1)" },
+              ],
+              { duration: 190, easing: "cubic-bezier(0.2, 0, 0, 1)" },
+            );
+          }
+          continue;
+        }
+        if (!orderChanged) {
+          continue;
+        }
+        const currentRect = nextRects.get(id);
+        if (!currentRect) {
+          continue;
+        }
+        const deltaX = previousRect.left - currentRect.left;
+        const deltaY = previousRect.top - currentRect.top;
+        if (Math.abs(deltaX) < 1 && Math.abs(deltaY) < 1) {
+          continue;
+        }
+        node.animate(
+          [
+            { transform: "translate(" + deltaX + "px, " + deltaY + "px)" },
+            { transform: "translate(0, 0)" },
+          ],
+          { duration: 200, easing: "cubic-bezier(0.2, 0, 0, 1)" },
+        );
+      }
+
+      if (hasRenderedCombatants) {
+        for (const id of previousIds) {
+          if (nextRects.has(id)) {
+            continue;
+          }
+          const oldNode = previousElements.get(id);
+          const oldRect = previousRects.get(id);
+          if (!oldNode || !oldRect) {
+            continue;
+          }
+          const ghost = oldNode.cloneNode(true);
+          if (!(ghost instanceof HTMLElement)) {
+            continue;
+          }
+          ghost.style.position = "fixed";
+          ghost.style.left = oldRect.left + "px";
+          ghost.style.top = oldRect.top + "px";
+          ghost.style.width = oldRect.width + "px";
+          ghost.style.height = oldRect.height + "px";
+          ghost.style.margin = "0";
+          ghost.style.pointerEvents = "none";
+          ghost.style.zIndex = "1000";
+          document.body.appendChild(ghost);
+          const animation = ghost.animate(
+            [
+              { opacity: 1, transform: "scale(1)" },
+              { opacity: 0, transform: "translateY(-4px) scale(0.985)" },
+            ],
+            { duration: 170, easing: "ease-out" },
+          );
+          animation.addEventListener("finish", () => {
+            ghost.remove();
+          });
+        }
+      }
+      previousCombatantOrderKey = nextOrderKey;
+      hasRenderedCombatants = true;
+
+      if (active && lastActiveCombatantId !== active) {
+        const activeRow = listEl.querySelector('[data-combatant-id="' + active + '"]');
+        if (activeRow) {
+          scrollRowIntoVisibleArea(activeRow);
+        }
+      }
+      lastActiveCombatantId = active ?? null;
     }
 
     async function refresh() {
@@ -1379,6 +1720,7 @@ export class CombatServer {
         statusEl.textContent = message;
         closeInitiativeGate();
         listEl.innerHTML = "";
+        renderShutdownScreen();
       });
       stream.onerror = async () => {
         if (serverShutDown) {
@@ -1478,6 +1820,11 @@ export class CombatServer {
         setSheetMode("none");
       }, 0);
     });
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener("resize", () => {
+        ensureDamageActionVisible();
+      });
+    }
     setSheetMode("none");
 
     if (playerId) {

@@ -580,8 +580,11 @@ export default class EncounterCastPlugin extends Plugin {
 		}
 
 		this.encounterRunning = false;
-		this.encounterServer.setEncounterRunning(false);
-		this.renderDashboardView();
+		this.updateSession({
+			...this.currentSession,
+			round: 1,
+			updatedAt: new Date().toISOString(),
+		});
 		new Notice("Encounter stopped.");
 	}
 
@@ -759,6 +762,7 @@ export default class EncounterCastPlugin extends Plugin {
 		try {
 			const state = await this.encounterServer.start();
 			this.encounterServer.setTheme(this.captureTheme());
+			this.encounterServer.setSupportUrl(this.resolveSupportUrlFromManifest());
 			this.encounterServer.setEncounterRunning(this.encounterRunning);
 			this.encounterServer.setSession(this.currentSession);
 			this.renderFoundationView();
@@ -868,10 +872,33 @@ export default class EncounterCastPlugin extends Plugin {
 			backgroundSecondary: read("--background-secondary", "#2a2a2a"),
 			textNormal: read("--text-normal", "#e8e8e8"),
 			textMuted: read("--text-muted", "#aaaaaa"),
+			textError: read("--text-error", "#e05a5a"),
 			interactiveAccent: read("--interactive-accent", "#5ea6ff"),
 			textOnAccent: read("--text-on-accent", "#ffffff"),
 			border: read("--background-modifier-border", "#3a3a3a"),
 		};
+	}
+
+	private resolveSupportUrlFromManifest(): string | null {
+		const candidateFunding = (this.manifest as { fundingUrl?: unknown }).fundingUrl;
+		if (typeof candidateFunding === "string" && candidateFunding.trim().length > 0) {
+			return candidateFunding.trim();
+		}
+		if (candidateFunding && typeof candidateFunding === "object") {
+			const values = Object.values(candidateFunding as Record<string, unknown>);
+			for (const value of values) {
+				if (typeof value === "string" && value.trim().length > 0) {
+					return value.trim();
+				}
+			}
+		}
+
+		const candidateAuthorUrl = (this.manifest as { authorUrl?: unknown }).authorUrl;
+		if (typeof candidateAuthorUrl === "string" && candidateAuthorUrl.trim().length > 0) {
+			return candidateAuthorUrl.trim();
+		}
+
+		return null;
 	}
 }
 
