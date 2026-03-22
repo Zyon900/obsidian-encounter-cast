@@ -872,7 +872,6 @@ export default class EncounterCastPlugin extends Plugin {
 			backgroundSecondary: read("--background-secondary", "#2a2a2a"),
 			textNormal: read("--text-normal", "#e8e8e8"),
 			textMuted: read("--text-muted", "#aaaaaa"),
-			textError: read("--text-error", "#e05a5a"),
 			interactiveAccent: read("--interactive-accent", "#5ea6ff"),
 			textOnAccent: read("--text-on-accent", "#ffffff"),
 			border: read("--background-modifier-border", "#3a3a3a"),

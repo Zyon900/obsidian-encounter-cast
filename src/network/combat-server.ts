@@ -575,7 +575,6 @@ export class CombatServer {
 			backgroundSecondary: "#2a2a2a",
 			textNormal: "#e8e8e8",
 			textMuted: "#aaaaaa",
-			textError: "#e05a5a",
 			interactiveAccent: "#5ea6ff",
 			textOnAccent: "#ffffff",
 			border: "#3a3a3a",
@@ -685,14 +684,13 @@ export class CombatServer {
       inset: 0;
       width: 100%;
       height: 100%;
-      fill: ${theme.interactiveAccent};
+      fill: ${theme.backgroundPrimary};
       stroke: ${theme.interactiveAccent};
       stroke-width: 1.4;
     }
     .initiative span {
       position: relative;
       z-index: 1;
-      color: ${theme.textOnAccent};
     }
     .name-block {
       min-width: 0;
@@ -745,14 +743,13 @@ export class CombatServer {
       inset: 0;
       width: 100%;
       height: 100%;
-      fill: ${theme.interactiveAccent};
+      fill: ${theme.backgroundPrimary};
       stroke: ${theme.interactiveAccent};
       stroke-width: 1.4;
     }
     .shield span {
       position: relative;
       z-index: 1;
-      color: ${theme.textOnAccent};
     }
     .shield.placeholder {
       opacity: 0;
@@ -782,38 +779,6 @@ export class CombatServer {
     }
     .stat-chip .icon {
       opacity: 0.9;
-    }
-    .self-health {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      color: ${theme.textError};
-      font-size: 15px;
-      font-weight: 700;
-      white-space: nowrap;
-    }
-    .heart-badge {
-      position: relative;
-      width: 40px;
-      height: 40px;
-      flex: 0 0 40px;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-    }
-    .heart-badge svg {
-      position: absolute;
-      inset: 0;
-      width: 100%;
-      height: 100%;
-      fill: ${theme.backgroundPrimary};
-      stroke: ${theme.textError};
-      stroke-width: 1.5;
-    }
-    .self-health-temp {
-      margin-left: 4px;
-      font-size: 14px;
-      font-weight: 700;
     }
     .sheet {
       position: fixed;
@@ -942,7 +907,7 @@ export class CombatServer {
       width: 100%;
       height: 100%;
       fill: ${theme.backgroundPrimary};
-      stroke: ${theme.border};
+      stroke: ${theme.interactiveAccent};
       stroke-width: 1.4;
     }
     .sheet-summary-shield span,
@@ -953,11 +918,12 @@ export class CombatServer {
     .sheet-summary-hp {
       font-weight: 700;
       letter-spacing: 0.01em;
+      font-size: 16px;
     }
     .sheet-summary-temp {
-      color: ${theme.textMuted};
       margin-left: 4px;
       font-weight: 600;
+      font-size: 16px;
     }
     .sheet-turn-cta {
       max-height: 0;
@@ -1561,20 +1527,12 @@ export class CombatServer {
         const isSelf = c.isSelf === true;
         const showAc = isSelf || c.isPlayer;
         const hpText = "<div class='" + hpClass(c.hpLabel) + "'>" + esc(c.hpLabel) + "</div>";
-        const selfHealth = isSelf
-          ? "<span class='self-health'>" +
-              "<span class='heart-badge'><svg viewBox='0 0 32 32' aria-hidden='true'><path d='M16 28C10.4 24.3 5.2 19.5 5.2 13.3C5.2 9.4 8.2 6.4 12.1 6.4C13.7 6.4 15.1 6.9 16 7.9C16.9 6.9 18.3 6.4 19.9 6.4C23.8 6.4 26.8 9.4 26.8 13.3C26.8 19.5 21.6 24.3 16 28Z'></path></svg></span>" +
-              "<span>" + esc(c.hpCurrent ?? "-") + "/" + esc(c.hpMax ?? "-") + "</span>" +
-              "<span class='self-health-temp'>+" + esc(c.tempHp ?? 0) + "</span>" +
-            "</span>"
-          : "";
         el.className = "combatant" + (c.id === active ? " active" : "") + (isSelf ? " is-self" : "") + (yourTurn ? " is-your-turn" : "");
         el.dataset.combatantId = c.id;
         el.innerHTML =
           initiativeMarkup(c.initiative ?? "-") +
           "<div class='name-block'><div class='name'>" + esc(c.name) + "</div>" + hpText + "</div>" +
           "<div class='tail'>" +
-            selfHealth +
             (showAc ? shieldMarkup(c.ac ?? "-", false) : shieldMarkup("-", true)) +
             (isMonster ? "<span class='subtle'>monster</span>" : "") +
           "</div>";
