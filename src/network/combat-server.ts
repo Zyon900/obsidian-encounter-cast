@@ -575,6 +575,7 @@ export class CombatServer {
 			backgroundSecondary: "#2a2a2a",
 			textNormal: "#e8e8e8",
 			textMuted: "#aaaaaa",
+			textError: "#e05a5a",
 			interactiveAccent: "#5ea6ff",
 			textOnAccent: "#ffffff",
 			border: "#3a3a3a",
@@ -644,6 +645,12 @@ export class CombatServer {
       opacity: 0.55;
       cursor: default;
     }
+    #joinBtn {
+      min-height: 48px;
+      font-size: 15px;
+      font-weight: 600;
+      width: 100%;
+    }
     .subtle {
       color: ${theme.textMuted};
       font-size: 12px;
@@ -685,7 +692,7 @@ export class CombatServer {
       width: 100%;
       height: 100%;
       fill: ${theme.backgroundPrimary};
-      stroke: ${theme.interactiveAccent};
+      stroke: ${theme.border};
       stroke-width: 1.4;
     }
     .initiative span {
@@ -744,7 +751,7 @@ export class CombatServer {
       width: 100%;
       height: 100%;
       fill: ${theme.backgroundPrimary};
-      stroke: ${theme.interactiveAccent};
+      stroke: ${theme.border};
       stroke-width: 1.4;
     }
     .shield span {
@@ -880,10 +887,7 @@ export class CombatServer {
       color: ${theme.textNormal};
       font-size: 13px;
       margin-bottom: 2px;
-      display: flex;
-      gap: 8px;
-      align-items: center;
-      flex-wrap: wrap;
+      display: block;
     }
     .sheet-summary.is-hidden {
       display: none;
@@ -924,6 +928,78 @@ export class CombatServer {
       margin-left: 4px;
       font-weight: 600;
       font-size: 16px;
+    }
+    .sheet-player-summary {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+      align-items: center;
+      column-gap: 8px;
+      width: 100%;
+    }
+    .sheet-player-main {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+      flex: 1 1 auto;
+      justify-self: start;
+    }
+    .sheet-player-vitals {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      white-space: nowrap;
+      justify-self: center;
+    }
+    .sheet-summary-shield {
+      justify-self: end;
+    }
+    .sheet-player-name-block {
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+    }
+    .sheet-player-name {
+      font-weight: 600;
+      line-height: 1.2;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .sheet-player-health {
+      text-transform: capitalize;
+      font-size: 12px;
+      color: ${theme.textMuted};
+      margin-top: 1px;
+    }
+    .sheet-player-heart {
+      position: relative;
+      width: 40px;
+      height: 40px;
+      flex: 0 0 40px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin-left: 2px;
+      margin-right: -2px;
+    }
+    .sheet-player-heart svg {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      fill: ${theme.backgroundPrimary};
+      stroke: ${theme.textError};
+      stroke-width: 1.7;
+    }
+    .sheet-player-temp {
+      color: ${theme.textMuted};
+      font-weight: 600;
+      margin-left: 2px;
+    }
+    .sheet-summary .initiative svg {
+      fill: ${theme.backgroundPrimary};
+      stroke: ${theme.interactiveAccent};
     }
     .sheet-turn-cta {
       max-height: 0;
@@ -1180,10 +1256,18 @@ export class CombatServer {
     </div>
     <div class="sheet-header">
       <div id="sheetSummary" class="sheet-summary">
-        <span class="sheet-summary-shield"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 2C18.4 3.5 21 4.8 27.4 7.1V15.8C27.4 22 23.2 27 16 30C8.8 27 4.6 22 4.6 15.8V7.1C11 4.8 13.6 3.5 16 2Z"></path></svg><span>-</span></span>
-        <span class="sheet-summary-heart"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 28C10.4 24.3 5.2 19.5 5.2 13.3C5.2 9.4 8.2 6.4 12.1 6.4C13.7 6.4 15.1 6.9 16 7.9C16.9 6.9 18.3 6.4 19.9 6.4C23.8 6.4 26.8 9.4 26.8 13.3C26.8 19.5 21.6 24.3 16 28Z"></path></svg><span></span></span>
-        <span class="sheet-summary-hp">-/-</span>
-        <span class="sheet-summary-temp">+0</span>
+        <div class="sheet-player-summary">
+          <div class="sheet-player-main">
+            <span class="initiative"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 2 27.8 8.7 27.8 23.3 16 30 4.2 23.3 4.2 8.7Z"></path></svg><span>-</span></span>
+            <span class="sheet-player-name-block"><span class="sheet-player-name">-</span><span class="sheet-player-health">healthy</span></span>
+          </div>
+          <span class="sheet-player-vitals">
+            <span class="sheet-player-heart"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 28C10.4 24.3 5.2 19.5 5.2 13.3C5.2 9.4 8.2 6.4 12.1 6.4C13.7 6.4 15.1 6.9 16 7.9C16.9 6.9 18.3 6.4 19.9 6.4C23.8 6.4 26.8 9.4 26.8 13.3C26.8 19.5 21.6 24.3 16 28Z"></path></svg></span>
+            <span class="sheet-summary-hp">-/-</span>
+            <span class="sheet-summary-temp">+0</span>
+          </span>
+          <span class="sheet-summary-shield"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 2C18.4 3.5 21 4.8 27.4 7.1V15.8C27.4 22 23.2 27 16 30C8.8 27 4.6 22 4.6 15.8V7.1C11 4.8 13.6 3.5 16 2Z"></path></svg><span>-</span></span>
+        </div>
       </div>
     </div>
     <div id="damagePanel" class="sheet-panel">
@@ -1339,10 +1423,18 @@ export class CombatServer {
     function setSheetFromSelf(self) {
       if (!self) {
         sheetSummary.innerHTML =
-          "<span class='sheet-summary-shield'><svg viewBox='0 0 32 32' aria-hidden='true'><path d='M16 2C18.4 3.5 21 4.8 27.4 7.1V15.8C27.4 22 23.2 27 16 30C8.8 27 4.6 22 4.6 15.8V7.1C11 4.8 13.6 3.5 16 2Z'></path></svg><span>-</span></span>" +
-          "<span class='sheet-summary-heart'><svg viewBox='0 0 32 32' aria-hidden='true'><path d='M16 28C10.4 24.3 5.2 19.5 5.2 13.3C5.2 9.4 8.2 6.4 12.1 6.4C13.7 6.4 15.1 6.9 16 7.9C16.9 6.9 18.3 6.4 19.9 6.4C23.8 6.4 26.8 9.4 26.8 13.3C26.8 19.5 21.6 24.3 16 28Z'></path></svg><span></span></span>" +
-          "<span class='sheet-summary-hp'>-/-</span>" +
-          "<span class='sheet-summary-temp'>+0</span>";
+          "<div class='sheet-player-summary'>" +
+            "<div class='sheet-player-main'>" +
+              "<span class='initiative'><svg viewBox='0 0 32 32' aria-hidden='true'><path d='M16 2 27.8 8.7 27.8 23.3 16 30 4.2 23.3 4.2 8.7Z'></path></svg><span>-</span></span>" +
+              "<span class='sheet-player-name-block'><span class='sheet-player-name'>-</span><span class='sheet-player-health'>healthy</span></span>" +
+            "</div>" +
+            "<span class='sheet-player-vitals'>" +
+              "<span class='sheet-player-heart'><svg viewBox='0 0 32 32' aria-hidden='true'><path d='M16 28C10.4 24.3 5.2 19.5 5.2 13.3C5.2 9.4 8.2 6.4 12.1 6.4C13.7 6.4 15.1 6.9 16 7.9C16.9 6.9 18.3 6.4 19.9 6.4C23.8 6.4 26.8 9.4 26.8 13.3C26.8 19.5 21.6 24.3 16 28Z'></path></svg></span>" +
+              "<span class='sheet-summary-hp'>-/-</span>" +
+              "<span class='sheet-summary-temp'>+0</span>" +
+            "</span>" +
+            "<span class='sheet-summary-shield'><svg viewBox='0 0 32 32' aria-hidden='true'><path d='M16 2C18.4 3.5 21 4.8 27.4 7.1V15.8C27.4 22 23.2 27 16 30C8.8 27 4.6 22 4.6 15.8V7.1C11 4.8 13.6 3.5 16 2Z'></path></svg><span>-</span></span>" +
+          "</div>";
         sheetAc.value = "";
         sheetHp.value = "";
         sheetHpMax.value = "";
@@ -1353,10 +1445,18 @@ export class CombatServer {
         return;
       }
       sheetSummary.innerHTML =
-        "<span class='sheet-summary-shield'><svg viewBox='0 0 32 32' aria-hidden='true'><path d='M16 2C18.4 3.5 21 4.8 27.4 7.1V15.8C27.4 22 23.2 27 16 30C8.8 27 4.6 22 4.6 15.8V7.1C11 4.8 13.6 3.5 16 2Z'></path></svg><span>" + esc(self.ac ?? "-") + "</span></span>" +
-        "<span class='sheet-summary-heart'><svg viewBox='0 0 32 32' aria-hidden='true'><path d='M16 28C10.4 24.3 5.2 19.5 5.2 13.3C5.2 9.4 8.2 6.4 12.1 6.4C13.7 6.4 15.1 6.9 16 7.9C16.9 6.9 18.3 6.4 19.9 6.4C23.8 6.4 26.8 9.4 26.8 13.3C26.8 19.5 21.6 24.3 16 28Z'></path></svg><span></span></span>" +
-        "<span class='sheet-summary-hp'>" + esc(self.hpCurrent ?? "-") + "/" + esc(self.hpMax ?? "-") + "</span>" +
-        "<span class='sheet-summary-temp'>+" + esc(self.tempHp ?? 0) + "</span>";
+        "<div class='sheet-player-summary'>" +
+          "<div class='sheet-player-main'>" +
+            "<span class='initiative'><svg viewBox='0 0 32 32' aria-hidden='true'><path d='M16 2 27.8 8.7 27.8 23.3 16 30 4.2 23.3 4.2 8.7Z'></path></svg><span>" + esc(self.initiative ?? "-") + "</span></span>" +
+            "<span class='sheet-player-name-block'><span class='sheet-player-name'>" + esc(self.name ?? "-") + "</span><span class='sheet-player-health'>" + esc(self.hpLabel ?? "healthy") + "</span></span>" +
+          "</div>" +
+          "<span class='sheet-player-vitals'>" +
+            "<span class='sheet-player-heart'><svg viewBox='0 0 32 32' aria-hidden='true'><path d='M16 28C10.4 24.3 5.2 19.5 5.2 13.3C5.2 9.4 8.2 6.4 12.1 6.4C13.7 6.4 15.1 6.9 16 7.9C16.9 6.9 18.3 6.4 19.9 6.4C23.8 6.4 26.8 9.4 26.8 13.3C26.8 19.5 21.6 24.3 16 28Z'></path></svg></span>" +
+            "<span class='sheet-summary-hp'>" + esc(self.hpCurrent ?? "-") + "/" + esc(self.hpMax ?? "-") + "</span>" +
+            "<span class='sheet-summary-temp'>+" + esc(self.tempHp ?? 0) + "</span>" +
+          "</span>" +
+          "<span class='sheet-summary-shield'><svg viewBox='0 0 32 32' aria-hidden='true'><path d='M16 2C18.4 3.5 21 4.8 27.4 7.1V15.8C27.4 22 23.2 27 16 30C8.8 27 4.6 22 4.6 15.8V7.1C11 4.8 13.6 3.5 16 2Z'></path></svg><span>" + esc(self.ac ?? "-") + "</span></span>" +
+        "</div>";
       sheetAc.value = self.ac ?? "";
       sheetHp.value = self.hpCurrent ?? "";
       sheetHpMax.value = self.hpMax ?? "";

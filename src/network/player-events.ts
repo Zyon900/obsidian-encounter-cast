@@ -8,6 +8,7 @@ export interface PlayerTheme {
 	backgroundSecondary: string;
 	textNormal: string;
 	textMuted: string;
+	textError: string;
 	interactiveAccent: string;
 	textOnAccent: string;
 	border: string;
