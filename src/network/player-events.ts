@@ -9,6 +9,9 @@ export interface PlayerTheme {
 	textNormal: string;
 	textMuted: string;
 	textError: string;
+	textSuccess: string;
+	textWarning: string;
+	textFaint: string;
 	interactiveAccent: string;
 	textOnAccent: string;
 	border: string;
@@ -60,6 +63,8 @@ export interface PlayerFacingState {
 		name: string;
 		isPlayer: boolean;
 		initiative: number | null;
+		initiativeRoll: number | null;
+		initiativeCriticalFailure: boolean;
 		hpLabel: "unscathed" | "healthy" | "hurt" | "critically wounded" | "down" | "dead";
 		isSelf: boolean;
 		hpCurrent: number | null;

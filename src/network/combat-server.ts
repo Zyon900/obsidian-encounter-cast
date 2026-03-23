@@ -576,6 +576,9 @@ export class CombatServer {
 			textNormal: "#e8e8e8",
 			textMuted: "#aaaaaa",
 			textError: "#e05a5a",
+			textSuccess: "#3bb273",
+			textWarning: "#d8a106",
+			textFaint: "#7e8791",
 			interactiveAccent: "#5ea6ff",
 			textOnAccent: "#ffffff",
 			border: "#3a3a3a",
@@ -635,6 +638,12 @@ export class CombatServer {
     input::placeholder {
       color: ${theme.textMuted};
     }
+    input:focus,
+    input:focus-visible {
+      outline: none;
+      border-color: ${theme.interactiveAccent};
+      box-shadow: 0 0 0 1px ${theme.interactiveAccent};
+    }
     button {
       background: ${theme.interactiveAccent};
       color: ${theme.textOnAccent};
@@ -670,7 +679,6 @@ export class CombatServer {
     }
     .combatant.is-self {
       transform: translateY(-1px);
-      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.22);
     }
     .combatant.is-your-turn {
       animation: pulse 1.2s ease-in-out infinite;
@@ -699,6 +707,12 @@ export class CombatServer {
       position: relative;
       z-index: 1;
     }
+    .initiative.is-crit-fail > span {
+      color: ${theme.textError};
+    }
+    .initiative.is-crit-success > span {
+      color: ${theme.textSuccess};
+    }
     .name-block {
       min-width: 0;
       flex: 1 1 auto;
@@ -714,17 +728,21 @@ export class CombatServer {
       margin-top: 2px;
       color: ${theme.textMuted};
     }
-    .hp-label.is-unscathed, .hp-label.is-healthy {
-      color: #3bb273;
+    .hp-label.is-unscathed, .hp-label.is-healthy,
+    .sheet-player-health.is-unscathed, .sheet-player-health.is-healthy {
+      color: ${theme.textSuccess};
     }
-    .hp-label.is-hurt {
-      color: #d8a106;
+    .hp-label.is-hurt,
+    .sheet-player-health.is-hurt {
+      color: ${theme.textWarning};
     }
-    .hp-label.is-critically-wounded, .hp-label.is-down {
-      color: #e05a5a;
+    .hp-label.is-critically-wounded, .hp-label.is-down,
+    .sheet-player-health.is-critically-wounded, .sheet-player-health.is-down {
+      color: ${theme.textError};
     }
-    .hp-label.is-dead {
-      color: #7e8791;
+    .hp-label.is-dead,
+    .sheet-player-health.is-dead {
+      color: ${theme.textFaint};
     }
     .tail {
       display: flex;
@@ -1108,7 +1126,7 @@ export class CombatServer {
     }
     .initiative-roll-btn.is-active {
       background: ${theme.interactiveAccent};
-      color: #fff;
+      color: ${theme.textOnAccent};
       border-color: transparent;
     }
     .initiative-roll-btn .hex {
@@ -1147,10 +1165,10 @@ export class CombatServer {
       z-index: 1;
     }
     .initiative-roll-btn .hex.red {
-      color: #e05a5a;
+      color: ${theme.textError};
     }
     .initiative-roll-btn .hex.green {
-      color: #3bb273;
+      color: ${theme.textSuccess};
     }
     .initiative-roll-btn.is-active .hex.red,
     .initiative-roll-btn.is-active .hex.green {
@@ -1259,7 +1277,7 @@ export class CombatServer {
         <div class="sheet-player-summary">
           <div class="sheet-player-main">
             <span class="initiative"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 2 27.8 8.7 27.8 23.3 16 30 4.2 23.3 4.2 8.7Z"></path></svg><span>-</span></span>
-            <span class="sheet-player-name-block"><span class="sheet-player-name">-</span><span class="sheet-player-health">healthy</span></span>
+            <span class="sheet-player-name-block"><span class="sheet-player-name">-</span><span class="sheet-player-health is-healthy">healthy</span></span>
           </div>
           <span class="sheet-player-vitals">
             <span class="sheet-player-heart"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 28C10.4 24.3 5.2 19.5 5.2 13.3C5.2 9.4 8.2 6.4 12.1 6.4C13.7 6.4 15.1 6.9 16 7.9C16.9 6.9 18.3 6.4 19.9 6.4C23.8 6.4 26.8 9.4 26.8 13.3C26.8 19.5 21.6 24.3 16 28Z"></path></svg></span>
@@ -1426,7 +1444,7 @@ export class CombatServer {
           "<div class='sheet-player-summary'>" +
             "<div class='sheet-player-main'>" +
               "<span class='initiative'><svg viewBox='0 0 32 32' aria-hidden='true'><path d='M16 2 27.8 8.7 27.8 23.3 16 30 4.2 23.3 4.2 8.7Z'></path></svg><span>-</span></span>" +
-              "<span class='sheet-player-name-block'><span class='sheet-player-name'>-</span><span class='sheet-player-health'>healthy</span></span>" +
+              "<span class='sheet-player-name-block'><span class='sheet-player-name'>-</span><span class='sheet-player-health is-healthy'>healthy</span></span>" +
             "</div>" +
             "<span class='sheet-player-vitals'>" +
               "<span class='sheet-player-heart'><svg viewBox='0 0 32 32' aria-hidden='true'><path d='M16 28C10.4 24.3 5.2 19.5 5.2 13.3C5.2 9.4 8.2 6.4 12.1 6.4C13.7 6.4 15.1 6.9 16 7.9C16.9 6.9 18.3 6.4 19.9 6.4C23.8 6.4 26.8 9.4 26.8 13.3C26.8 19.5 21.6 24.3 16 28Z'></path></svg></span>" +
@@ -1447,8 +1465,12 @@ export class CombatServer {
       sheetSummary.innerHTML =
         "<div class='sheet-player-summary'>" +
           "<div class='sheet-player-main'>" +
-            "<span class='initiative'><svg viewBox='0 0 32 32' aria-hidden='true'><path d='M16 2 27.8 8.7 27.8 23.3 16 30 4.2 23.3 4.2 8.7Z'></path></svg><span>" + esc(self.initiative ?? "-") + "</span></span>" +
-            "<span class='sheet-player-name-block'><span class='sheet-player-name'>" + esc(self.name ?? "-") + "</span><span class='sheet-player-health'>" + esc(self.hpLabel ?? "healthy") + "</span></span>" +
+            initiativeMarkup(
+              self.initiative ?? "-",
+              self.initiativeCriticalFailure === true,
+              self.initiativeRoll === 20
+            ) +
+            "<span class='sheet-player-name-block'><span class='sheet-player-name'>" + esc(self.name ?? "-") + "</span><span class='sheet-player-health is-" + String(self.hpLabel ?? "healthy").replaceAll(" ", "-") + "'>" + esc(self.hpLabel ?? "healthy") + "</span></span>" +
           "</div>" +
           "<span class='sheet-player-vitals'>" +
             "<span class='sheet-player-heart'><svg viewBox='0 0 32 32' aria-hidden='true'><path d='M16 28C10.4 24.3 5.2 19.5 5.2 13.3C5.2 9.4 8.2 6.4 12.1 6.4C13.7 6.4 15.1 6.9 16 7.9C16.9 6.9 18.3 6.4 19.9 6.4C23.8 6.4 26.8 9.4 26.8 13.3C26.8 19.5 21.6 24.3 16 28Z'></path></svg></span>" +
@@ -1464,6 +1486,15 @@ export class CombatServer {
       if (sheetMode !== "damage") {
         sheetDamage.value = "";
       }
+    }
+
+    function cancelSheetEdit() {
+      if (sheetMode !== "edit") {
+        return;
+      }
+      const self = lastState?.playerState?.combatants?.find((combatant) => combatant.isSelf) ?? null;
+      setSheetFromSelf(self);
+      setSheetMode("none");
     }
 
     async function saveFromSheet() {
@@ -1515,8 +1546,9 @@ export class CombatServer {
       setSheetMode("none");
     }
 
-    function initiativeMarkup(value) {
-      return "<span class='initiative'><svg viewBox='0 0 32 32' aria-hidden='true'><path d='M16 2 27.8 8.7 27.8 23.3 16 30 4.2 23.3 4.2 8.7Z'></path></svg><span>" + esc(value) + "</span></span>";
+    function initiativeMarkup(value, isCriticalFailure, isCriticalSuccess) {
+      const stateClass = isCriticalFailure ? " is-crit-fail" : isCriticalSuccess ? " is-crit-success" : "";
+      return "<span class='initiative" + stateClass + "'><svg viewBox='0 0 32 32' aria-hidden='true'><path d='M16 2 27.8 8.7 27.8 23.3 16 30 4.2 23.3 4.2 8.7Z'></path></svg><span>" + esc(value) + "</span></span>";
     }
 
     function shieldMarkup(value, isPlaceholder) {
@@ -1630,7 +1662,7 @@ export class CombatServer {
         el.className = "combatant" + (c.id === active ? " active" : "") + (isSelf ? " is-self" : "") + (yourTurn ? " is-your-turn" : "");
         el.dataset.combatantId = c.id;
         el.innerHTML =
-          initiativeMarkup(c.initiative ?? "-") +
+          initiativeMarkup(c.initiative ?? "-", c.initiativeCriticalFailure === true, c.initiativeRoll === 20) +
           "<div class='name-block'><div class='name'>" + esc(c.name) + "</div>" + hpText + "</div>" +
           "<div class='tail'>" +
             (showAc ? shieldMarkup(c.ac ?? "-", false) : shieldMarkup("-", true)) +
@@ -1829,7 +1861,10 @@ export class CombatServer {
       if (!playerId) return;
       await api("/api/player/end-turn", "POST", { playerId });
     };
-    initiativeNat1Btn.onclick = () => setInitiativeRollType("nat1");
+    initiativeNat1Btn.onclick = () => {
+      setInitiativeRollType("nat1");
+      initiativeGateInput.value = "1";
+    };
     initiativeNormalBtn.onclick = () => setInitiativeRollType("normal");
     initiativeNat20Btn.onclick = () => setInitiativeRollType("nat20");
     initiativeGateSubmit.onclick = async () => {
@@ -1883,6 +1918,19 @@ export class CombatServer {
         ensureDamageActionVisible();
       });
     }
+    document.addEventListener("pointerdown", (event) => {
+      if (sheetMode !== "edit" || sheetRoot.style.display === "none") {
+        return;
+      }
+      const target = event.target;
+      if (!(target instanceof Node)) {
+        return;
+      }
+      if (sheetRoot.contains(target)) {
+        return;
+      }
+      cancelSheetEdit();
+    });
     setSheetMode("none");
 
     if (playerId) {

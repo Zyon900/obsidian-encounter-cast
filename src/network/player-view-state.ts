@@ -46,6 +46,8 @@ export function buildPlayerViewState(
 				name: combatant.name,
 				isPlayer: combatant.isPlayer === true,
 				initiative: combatant.initiative,
+				initiativeRoll: combatant.initiativeRoll,
+				initiativeCriticalFailure: combatant.initiativeCriticalFailure,
 				hpLabel: computeHpStatusLabel(combatant.hpCurrent, combatant.hpMax, true),
 				isSelf,
 				hpCurrent: isSelf ? combatant.hpCurrent : null,
