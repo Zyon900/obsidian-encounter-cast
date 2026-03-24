@@ -1,6 +1,7 @@
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import { createServer, type IncomingMessage, type Server as HttpServer, type ServerResponse } from "node:http";
 import { networkInterfaces } from "node:os";
+import QRCode from "qrcode";
 import {
 	advanceCombatTurn,
 	createCombatSession,
@@ -168,6 +169,13 @@ export class CombatServer {
 					session: this.activeSession,
 					running: this.encounterRunning,
 				});
+				return;
+			}
+
+			if (pathname === "/api/invite-qr" && method === "GET") {
+				const inviteUrl = this.resolveInviteUrl(req, token);
+				const svg = await this.renderInviteQrSvg(inviteUrl);
+				this.sendSvg(res, 200, svg);
 				return;
 			}
 
@@ -492,6 +500,29 @@ export class CombatServer {
 		res.end(html);
 	}
 
+	private sendSvg(res: ServerResponse, statusCode: number, svg: string): void {
+		res.statusCode = statusCode;
+		res.setHeader("Content-Type", "image/svg+xml; charset=utf-8");
+		res.setHeader("Cache-Control", "no-store");
+		res.end(svg);
+	}
+
+	private resolveInviteUrl(req: IncomingMessage, token: string): string {
+		const hostHeader = typeof req.headers.host === "string" ? req.headers.host.trim() : "";
+		if (hostHeader.length > 0) {
+			return `http://${hostHeader}/?token=${encodeURIComponent(token)}`;
+		}
+		return this.state.inviteUrls[0] ?? `http://127.0.0.1/?token=${encodeURIComponent(token)}`;
+	}
+
+	private async renderInviteQrSvg(inviteUrl: string): Promise<string> {
+		try {
+			return await QRCode.toString(inviteUrl, { type: "svg", width: 280, margin: 1 });
+		} catch {
+			return `<svg xmlns="http://www.w3.org/2000/svg" width="320" height="120" viewBox="0 0 320 120"><rect width="100%" height="100%" fill="white"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="13" fill="black">Unable to render QR code</text></svg>`;
+		}
+	}
+
 	private isAuthorizedRequest(req: IncomingMessage, token: string): boolean {
 		const queryToken = this.readQuery(req.url).get("token");
 		const headerToken = this.readHeaderToken(req.headers.authorization);
@@ -631,6 +662,9 @@ export class CombatServer {
       gap: 8px;
       align-items: center;
     }
+    .row + .row {
+      margin-top: 8px;
+    }
     input, button {
       padding: 8px;
       border-radius: 8px;
@@ -662,6 +696,47 @@ export class CombatServer {
       font-size: 15px;
       font-weight: 600;
       width: 100%;
+    }
+    .secondary-btn {
+      width: 100%;
+      min-height: 48px;
+      background: transparent;
+      border: 1px solid ${theme.border};
+      color: ${theme.textNormal};
+      font-size: 15px;
+      font-weight: 600;
+    }
+    .qr-panel {
+      text-align: center;
+    }
+    .qr-image-wrap {
+      display: flex;
+      justify-content: center;
+      margin: 8px 0 10px;
+    }
+    .qr-image-frame {
+      border: 1px solid ${theme.border};
+      border-radius: 12px;
+      background: ${theme.backgroundPrimary};
+      padding: 8px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 220px;
+      min-height: 220px;
+    }
+    .qr-image-frame img {
+      width: min(72vw, 280px);
+      height: auto;
+      display: block;
+      background: white;
+    }
+    .qr-link {
+      word-break: break-all;
+      display: inline-block;
+      margin-bottom: 10px;
+      color: ${theme.textMuted};
+      text-decoration: underline;
     }
     .subtle {
       color: ${theme.textMuted};
@@ -1236,7 +1311,18 @@ export class CombatServer {
         <label>Temp HP<input id="joinTempHpInput" type="number" placeholder="Optional" /></label>
       </div>
       <div class="row"><button id="joinBtn">Join</button></div>
+      <div class="row"><button id="showQrBtn" class="secondary-btn" type="button">Show QR-Code</button></div>
       <div id="joinMsg"></div>
+    </div>
+    <div class="panel qr-panel" id="qrPanel" style="display:none;">
+      <h3>Join via QR-Code</h3>
+      <div class="qr-image-wrap">
+        <div class="qr-image-frame">
+          <img id="qrImage" alt="Join encounter QR code" />
+        </div>
+      </div>
+      <a id="qrLink" class="qr-link" href="#" target="_blank" rel="noopener noreferrer"></a>
+      <div class="row"><button id="qrBackBtn" class="secondary-btn" type="button">Back</button></div>
     </div>
     <div id="appPanel" class="app-shell" style="display:none;">
       <div class="app-header row"><strong id="title">Encounter</strong></div>
@@ -1317,6 +1403,11 @@ export class CombatServer {
     const joinTempHpInput = document.getElementById("joinTempHpInput");
     const joinBtn = document.getElementById("joinBtn");
     const joinMsg = document.getElementById("joinMsg");
+    const showQrBtn = document.getElementById("showQrBtn");
+    const qrPanel = document.getElementById("qrPanel");
+    const qrImage = document.getElementById("qrImage");
+    const qrLink = document.getElementById("qrLink");
+    const qrBackBtn = document.getElementById("qrBackBtn");
     const statusEl = document.getElementById("status");
     const listEl = document.getElementById("list");
     const initiativeGate = document.getElementById("initiativeGate");
@@ -1356,6 +1447,13 @@ export class CombatServer {
       const url = path + (path.includes("?") ? "&" : "?") + "token=" + encodeURIComponent(token);
       const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
       return res.json();
+    }
+
+    function buildInviteLink() {
+      const inviteUrl = new URL(window.location.href);
+      inviteUrl.searchParams.set("token", token);
+      inviteUrl.searchParams.delete("playerId");
+      return inviteUrl.toString();
     }
 
     function readNum(id) {
@@ -1431,6 +1529,26 @@ export class CombatServer {
       closeInitiativeGate();
       listEl.innerHTML = "";
       renderShutdownScreen();
+    }
+
+    function openQrPanel() {
+      if (playerId) {
+        return;
+      }
+      const inviteUrl = buildInviteLink();
+      qrLink.href = inviteUrl;
+      qrLink.textContent = inviteUrl;
+      qrImage.src = "/api/invite-qr?token=" + encodeURIComponent(token) + "&v=" + Date.now();
+      joinPanel.style.display = "none";
+      qrPanel.style.display = "block";
+    }
+
+    function openJoinPanel() {
+      if (playerId) {
+        return;
+      }
+      qrPanel.style.display = "none";
+      joinPanel.style.display = "block";
     }
 
     async function checkServerAvailability() {
@@ -1878,6 +1996,7 @@ export class CombatServer {
           tempHp: joinTempHp ?? 0
         });
       }
+      qrPanel.style.display = "none";
       joinPanel.style.display = "none";
       appPanel.style.display = "block";
       sheetRoot.style.display = "block";
@@ -1887,6 +2006,12 @@ export class CombatServer {
         render(data.state);
       }
       startStream();
+    };
+    showQrBtn.onclick = () => {
+      openQrPanel();
+    };
+    qrBackBtn.onclick = () => {
+      openJoinPanel();
     };
 
     endRoundBtn.onclick = async () => {
@@ -1971,6 +2096,7 @@ export class CombatServer {
 
     if (playerId) {
       refresh().then(() => {
+        qrPanel.style.display = "none";
         joinPanel.style.display = "none";
         appPanel.style.display = "block";
         sheetRoot.style.display = "block";
