@@ -600,6 +600,9 @@ export class CombatServer {
       background: ${theme.backgroundPrimary};
       color: ${theme.textNormal};
     }
+    body.initiative-modal-open {
+      overflow: hidden;
+    }
     .wrap {
       max-width: 760px;
       margin: 0 auto;
@@ -1044,7 +1047,8 @@ export class CombatServer {
       inset: 0;
       display: none;
       z-index: 100;
-      background: ${theme.backgroundPrimary};
+      background: color-mix(in srgb, ${theme.backgroundPrimary} 62%, transparent);
+      backdrop-filter: saturate(1.05) blur(1.5px);
       padding: 20px;
       box-sizing: border-box;
       align-items: center;
@@ -1339,6 +1343,7 @@ export class CombatServer {
     let playerId = localStorage.getItem("encounter-cast-player-id") || "";
     let stream = null;
     let serverShutDown = false;
+    let availabilityCheckTimer = null;
     let lastState = null;
     let sheetMode = "none";
     let initiativeGateOpen = false;
@@ -1407,6 +1412,39 @@ export class CombatServer {
           "<h2>Thanks for playing!</h2>" +
           "<p>" + supportLine + "</p>" +
         "</div></div>";
+    }
+
+    function handleServerShutdown(message) {
+      if (serverShutDown) {
+        return;
+      }
+      serverShutDown = true;
+      if (availabilityCheckTimer !== null) {
+        clearInterval(availabilityCheckTimer);
+        availabilityCheckTimer = null;
+      }
+      if (stream) {
+        stream.close();
+        stream = null;
+      }
+      statusEl.textContent = message || "Encounter server has shut down.";
+      closeInitiativeGate();
+      listEl.innerHTML = "";
+      renderShutdownScreen();
+    }
+
+    async function checkServerAvailability() {
+      if (serverShutDown || playerId) {
+        return;
+      }
+      try {
+        const response = await fetch("/health", { cache: "no-store" });
+        if (!response.ok) {
+          throw new Error("Health endpoint unavailable.");
+        }
+      } catch {
+        handleServerShutdown("Encounter server has shut down.");
+      }
     }
 
     function setSheetMode(mode) {
@@ -1602,6 +1640,7 @@ export class CombatServer {
       if (initiativeGateOpen) return;
       initiativeGateOpen = true;
       setInitiativeRollType("normal");
+      document.body.classList.add("initiative-modal-open");
       initiativeGate.classList.add("open");
       setTimeout(() => {
         initiativeGateInput.focus();
@@ -1612,6 +1651,7 @@ export class CombatServer {
     function closeInitiativeGate() {
       initiativeGateOpen = false;
       initiativeGate.classList.remove("open");
+      document.body.classList.remove("initiative-modal-open");
       initiativeGateInput.value = "";
     }
 
@@ -1794,11 +1834,6 @@ export class CombatServer {
         } catch {}
       });
       stream.addEventListener("server_shutdown", (event) => {
-        serverShutDown = true;
-        if (stream) {
-          stream.close();
-          stream = null;
-        }
         const message = (() => {
           try {
             const parsed = JSON.parse(event.data || "{}");
@@ -1807,10 +1842,7 @@ export class CombatServer {
             return "Encounter server has shut down.";
           }
         })();
-        statusEl.textContent = message;
-        closeInitiativeGate();
-        listEl.innerHTML = "";
-        renderShutdownScreen();
+        handleServerShutdown(message);
       });
       stream.onerror = async () => {
         if (serverShutDown) {
@@ -1932,6 +1964,10 @@ export class CombatServer {
       cancelSheetEdit();
     });
     setSheetMode("none");
+    availabilityCheckTimer = window.setInterval(() => {
+      void checkServerAvailability();
+    }, 3000);
+    void checkServerAvailability();
 
     if (playerId) {
       refresh().then(() => {
