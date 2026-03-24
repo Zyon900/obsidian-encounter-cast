@@ -1,0 +1,91 @@
+<div class="wrap">
+  <div class="panel" id="joinPanel">
+    <h3>Join encounter</h3>
+    <div class="sheet-grid">
+      <label>Name<input id="nameInput" placeholder="Your name" /></label>
+      <label>AC<input id="joinAcInput" type="number" placeholder="Optional" /></label>
+      <label>HP<input id="joinHpInput" type="number" placeholder="Optional" /></label>
+      <label>Max HP<input id="joinHpMaxInput" type="number" placeholder="Optional" /></label>
+      <label>Temp HP<input id="joinTempHpInput" type="number" placeholder="Optional" /></label>
+    </div>
+    <div class="row"><button id="joinBtn">Join</button></div>
+    <div class="row"><button id="showQrBtn" class="secondary-btn" type="button">Show QR-Code</button></div>
+    <div id="joinMsg"></div>
+  </div>
+  <div class="panel qr-panel" id="qrPanel" hidden>
+    <h3>Join via QR-Code</h3>
+    <div class="qr-image-wrap">
+      <div class="qr-image-frame">
+        <img id="qrImage" alt="Join encounter QR code" />
+      </div>
+    </div>
+    <a id="qrLink" class="qr-link" href="#" target="_blank" rel="noopener noreferrer"></a>
+    <div class="row"><button id="qrBackBtn" class="secondary-btn" type="button">Back</button></div>
+  </div>
+  <div id="appPanel" class="app-shell" hidden>
+    <div class="app-header row"><strong id="title">Encounter</strong></div>
+    <div id="status"></div>
+    <div id="list"></div>
+  </div>
+</div>
+<div id="initiativeGate" class="initiative-gate" aria-live="polite">
+  <div class="initiative-gate-card">
+    <h2>Roll Initiative!</h2>
+    <input id="initiativeGateInput" type="number" inputmode="numeric" placeholder="Initiative total" />
+    <div class="initiative-roll-toggle">
+      <button id="initiativeNat1Btn" class="initiative-roll-btn hex-only" type="button" aria-label="Natural 1">
+        <span class="initiative-mini-hex hex red">
+          <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 2 27.8 8.7 27.8 23.3 16 30 4.2 23.3 4.2 8.7Z"></path></svg>
+          <span>1</span>
+        </span>
+      </button>
+      <button id="initiativeNormalBtn" class="initiative-roll-btn is-active" type="button"><span>Normal</span></button>
+      <button id="initiativeNat20Btn" class="initiative-roll-btn hex-only" type="button" aria-label="Natural 20">
+        <span class="initiative-mini-hex hex green">
+          <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 2 27.8 8.7 27.8 23.3 16 30 4.2 23.3 4.2 8.7Z"></path></svg>
+          <span>20</span>
+        </span>
+      </button>
+    </div>
+    <button id="initiativeGateSubmit" type="button">Submit initiative</button>
+  </div>
+</div>
+<div id="sheetRoot" class="sheet" hidden>
+  <div class="sheet-handle" aria-hidden="true"></div>
+  <div id="editPanel" class="sheet-panel">
+    <div class="sheet-grid">
+      <label>AC<input id="sheetAc" type="number" placeholder="AC" /></label>
+      <label>HP<input id="sheetHp" type="number" placeholder="HP" /></label>
+      <label>Max HP<input id="sheetHpMax" type="number" placeholder="Max HP" /></label>
+      <label>Temp HP<input id="sheetTempHp" type="number" placeholder="Temp HP" /></label>
+    </div>
+  </div>
+  <div class="sheet-header">
+    <div id="sheetSummary" class="sheet-summary">
+      <div class="sheet-player-summary">
+        <div class="sheet-player-main">
+          <span class="initiative"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 2 27.8 8.7 27.8 23.3 16 30 4.2 23.3 4.2 8.7Z"></path></svg><span>-</span></span>
+          <span class="sheet-player-name-block"><span class="sheet-player-name">-</span><span class="sheet-player-health is-healthy">healthy</span></span>
+        </div>
+        <span class="sheet-player-vitals">
+          <span class="sheet-player-heart"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 28C10.4 24.3 5.2 19.5 5.2 13.3C5.2 9.4 8.2 6.4 12.1 6.4C13.7 6.4 15.1 6.9 16 7.9C16.9 6.9 18.3 6.4 19.9 6.4C23.8 6.4 26.8 9.4 26.8 13.3C26.8 19.5 21.6 24.3 16 28Z"></path></svg></span>
+          <span class="sheet-summary-hp">-/-</span>
+          <span class="sheet-summary-temp">+0</span>
+        </span>
+        <span class="sheet-summary-shield"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 2C18.4 3.5 21 4.8 27.4 7.1V15.8C27.4 22 23.2 27 16 30C8.8 27 4.6 22 4.6 15.8V7.1C11 4.8 13.6 3.5 16 2Z"></path></svg><span>-</span></span>
+      </div>
+    </div>
+  </div>
+  <div id="damagePanel" class="sheet-panel">
+    <div class="sheet-grid">
+      <label>Damage / heal<input id="sheetDamage" type="number" placeholder="e.g. 7 damage or -7 heal" /></label>
+    </div>
+  </div>
+  <div class="sheet-actions">
+    <button id="editModeBtn" type="button">Edit stats</button>
+    <button id="damageModeBtn" type="button">Damage <span class="sep">|</span> Heal</button>
+  </div>
+  <div id="sheetTurnCta" class="sheet-turn-cta">
+    <button id="endRoundBtn" type="button">End round</button>
+  </div>
+</div>

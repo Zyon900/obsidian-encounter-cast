@@ -37,6 +37,10 @@ const context = await esbuild.context({
 	format: "cjs",
 	platform: "node",
 	target: "es2018",
+	loader: {
+		".css": "text",
+		".html": "text",
+	},
 	jsx: "automatic",
 	jsxImportSource: "preact",
 	logLevel: "info",
