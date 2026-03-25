@@ -23,11 +23,11 @@ export interface DashboardActions {
 	onActivateCombatant: (combatantId: string) => void;
 	onMoveCombatant: (combatantId: string, direction: "up" | "down") => void;
 	onMoveCombatantToIndex: (combatantId: string, targetIndex: number) => void;
-	onDamageHealCombatant: (combatantId: string) => void;
+	onDamageHealCombatants: (combatantIds: string[]) => void;
 	onRenameCombatant: (combatantId: string) => void;
-	onDeleteCombatant: (combatantId: string) => void;
-	onDuplicateCombatant: (combatantId: string) => void;
-	onKickPlayer: (combatantId: string) => void;
+	onDeleteCombatants: (combatantIds: string[]) => void;
+	onDuplicateCombatants: (combatantIds: string[]) => void;
+	onKickPlayers: (combatantIds: string[]) => void;
 	onSetHp: (combatantId: string, value: string) => void;
 	onSetHpMax: (combatantId: string, value: string) => void;
 	onSetTempHp: (combatantId: string, value: string) => void;

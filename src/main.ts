@@ -100,20 +100,20 @@ export default class EncounterCastPlugin extends Plugin {
 					onMoveCombatantToIndex: (combatantId, targetIndex) => {
 						this.reorderCombatantToIndex(combatantId, targetIndex);
 					},
-					onDamageHealCombatant: (combatantId) => {
-						this.openDamageHealPlaceholder(combatantId);
+					onDamageHealCombatants: (combatantIds) => {
+						this.openDamageHealPlaceholder(combatantIds);
 					},
 					onRenameCombatant: (combatantId) => {
 						this.renameCombatant(combatantId);
 					},
-					onDeleteCombatant: (combatantId) => {
-						this.deleteCombatant(combatantId);
+					onDeleteCombatants: (combatantIds) => {
+						this.deleteCombatants(combatantIds);
 					},
-					onDuplicateCombatant: (combatantId) => {
-						this.duplicateCombatant(combatantId);
+					onDuplicateCombatants: (combatantIds) => {
+						this.duplicateCombatants(combatantIds);
 					},
-					onKickPlayer: (combatantId) => {
-						this.kickPlayerCombatant(combatantId);
+					onKickPlayers: (combatantIds) => {
+						this.kickPlayers(combatantIds);
 					},
 					onSetHp: (combatantId, value) => {
 						this.updateCombatantHp(combatantId, value);
@@ -701,12 +701,25 @@ export default class EncounterCastPlugin extends Plugin {
 		this.updateSession(moveCombatant(this.currentSession, combatantId, targetIndex));
 	}
 
-	private openDamageHealPlaceholder(combatantId: string): void {
-		const combatant = this.currentSession?.combatants.find((candidate) => candidate.id === combatantId) ?? null;
-		if (!combatant) {
+	private openDamageHealPlaceholder(combatantIds: string[]): void {
+		if (!this.currentSession) {
 			return;
 		}
-		new Notice(`Damage / heal for ${combatant.name} is not implemented yet.`);
+		const targets = this.currentSession.combatants.filter(
+			(combatant) => combatantIds.includes(combatant.id) && combatant.isPlayer !== true,
+		);
+		if (targets.length === 0) {
+			return;
+		}
+		if (targets.length === 1) {
+			const target = targets[0];
+			if (!target) {
+				return;
+			}
+			new Notice(`Damage / heal for ${target.name} is not implemented yet.`);
+			return;
+		}
+		new Notice(`Damage / heal for ${targets.length} combatants is not implemented yet.`);
 	}
 
 	private renameCombatant(combatantId: string): void {
@@ -744,50 +757,74 @@ export default class EncounterCastPlugin extends Plugin {
 		}).open();
 	}
 
-	private deleteCombatant(combatantId: string): void {
+	private deleteCombatants(combatantIds: string[]): void {
 		if (!this.currentSession) {
 			return;
 		}
-		const combatant = this.currentSession.combatants.find((candidate) => candidate.id === combatantId) ?? null;
-		if (!combatant || combatant.isPlayer === true) {
+
+		const uniqueIds = Array.from(new Set(combatantIds));
+		let nextSession: CombatSession | null = this.currentSession;
+		let removedCount = 0;
+		for (const combatantId of uniqueIds) {
+			if (!nextSession) {
+				break;
+			}
+			const combatant = nextSession.combatants.find((candidate) => candidate.id === combatantId) ?? null;
+			if (!combatant || combatant.isPlayer === true) {
+				continue;
+			}
+			nextSession = this.removeCombatantFromSession(nextSession, combatantId);
+			if (!nextSession) {
+				continue;
+			}
+			removedCount += 1;
+		}
+		if (!nextSession || removedCount === 0) {
 			return;
 		}
 
-		const next = this.removeCombatantFromSession(this.currentSession, combatantId);
-		if (!next) {
-			return;
-		}
-		this.updateSession(next);
+		this.updateSession(nextSession);
+		new Notice(removedCount === 1 ? "1 monster removed." : `${removedCount} monsters removed.`);
 	}
 
-	private duplicateCombatant(combatantId: string): void {
+	private duplicateCombatants(combatantIds: string[]): void {
 		if (!this.currentSession) {
 			return;
 		}
-		const index = this.currentSession.combatants.findIndex((candidate) => candidate.id === combatantId);
-		if (index === -1) {
-			return;
-		}
-		const combatant = this.currentSession.combatants[index];
-		if (!combatant || combatant.isPlayer === true) {
+
+		const selected = new Set(combatantIds);
+		if (selected.size === 0) {
 			return;
 		}
 
-		const duplicate = {
-			...combatant,
-			id: `combatant-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
-			name: `${combatant.name} copy`,
-		};
-		const nextCombatants = this.currentSession.combatants.slice();
-		nextCombatants.splice(index + 1, 0, duplicate);
+		let duplicateCount = 0;
+		const nextCombatants: CombatSession["combatants"] = [];
+		for (const combatant of this.currentSession.combatants) {
+			nextCombatants.push(combatant);
+			if (!selected.has(combatant.id) || combatant.isPlayer === true) {
+				continue;
+			}
+
+			duplicateCount += 1;
+			nextCombatants.push({
+				...combatant,
+				id: `combatant-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+				name: `${combatant.name} copy`,
+			});
+		}
+		if (duplicateCount === 0) {
+			return;
+		}
+
 		this.updateSession({
 			...this.currentSession,
 			combatants: nextCombatants,
 			updatedAt: new Date().toISOString(),
 		});
+		new Notice(duplicateCount === 1 ? "1 monster duplicated." : `${duplicateCount} monsters duplicated.`);
 	}
 
-	private kickPlayerCombatant(combatantId: string): void {
+	private kickPlayers(combatantIds: string[]): void {
 		if (!this.currentSession) {
 			return;
 		}
@@ -795,17 +832,33 @@ export default class EncounterCastPlugin extends Plugin {
 			new Notice("Encounter server is offline.");
 			return;
 		}
-		const combatant = this.currentSession.combatants.find((candidate) => candidate.id === combatantId) ?? null;
-		if (!combatant || combatant.isPlayer !== true) {
-			return;
-		}
 
-		const kicked = this.encounterServer.kickPlayerByCombatantId(combatantId);
-		if (!kicked) {
-			new Notice("Failed to kick player.");
+		const uniqueIds = Array.from(new Set(combatantIds));
+		let kickedCount = 0;
+		let failedCount = 0;
+		for (const combatantId of uniqueIds) {
+			const combatant = this.currentSession.combatants.find((candidate) => candidate.id === combatantId) ?? null;
+			if (!combatant || combatant.isPlayer !== true) {
+				continue;
+			}
+
+			const kicked = this.encounterServer.kickPlayerByCombatantId(combatantId);
+			if (kicked) {
+				kickedCount += 1;
+				continue;
+			}
+			failedCount += 1;
+		}
+		if (kickedCount === 0 && failedCount > 0) {
+			new Notice("Failed to kick selected players.");
 			return;
 		}
-		new Notice(`Kicked ${combatant.name}.`);
+		if (kickedCount > 0) {
+			new Notice(kickedCount === 1 ? "Kicked 1 player." : `Kicked ${kickedCount} players.`);
+		}
+		if (failedCount > 0) {
+			new Notice(`Failed to kick ${failedCount} selected player${failedCount === 1 ? "" : "s"}.`);
+		}
 	}
 
 	private removeCombatantFromSession(session: CombatSession, combatantId: string): CombatSession | null {

@@ -43,6 +43,7 @@ function areWrappedMapsEqual(
 export function DashboardPanel({ model, actions }: DashboardPanelProps) {
 	const [draggingCombatantId, setDraggingCombatantId] = useState<string | null>(null);
 	const [dragTargetIndex, setDragTargetIndex] = useState<number | null>(null);
+	const [selectedCombatantIds, setSelectedCombatantIds] = useState<string[]>([]);
 	const [wrappedRows, setWrappedRows] = useState<Record<string, boolean>>({});
 	const [layoutTick, setLayoutTick] = useState(0);
 	const dashboardRootRef = useRef<HTMLDivElement | null>(null);
@@ -56,6 +57,115 @@ export function DashboardPanel({ model, actions }: DashboardPanelProps) {
 	const session = model.session;
 	const canControlTurns = Boolean(session && model.encounterRunning && session.combatants.length > 0);
 	const hasEncounter = Boolean(session);
+	const combatantLookup = useRef(new Map<string, Combatant>());
+
+	useEffect(() => {
+		const lookup = new Map<string, Combatant>();
+		for (const combatant of session?.combatants ?? []) {
+			lookup.set(combatant.id, combatant);
+		}
+		combatantLookup.current = lookup;
+		setSelectedCombatantIds((current) => current.filter((combatantId) => lookup.has(combatantId)));
+	}, [session]);
+
+	const isPlayerCombatantId = (combatantId: string): boolean => {
+		return combatantLookup.current.get(combatantId)?.isPlayer === true;
+	};
+
+	const getContextSelection = (combatant: Combatant): string[] => {
+		const isSelected = selectedCombatantIds.includes(combatant.id);
+		if (!isSelected) {
+			return [combatant.id];
+		}
+
+		const targetIsPlayer = combatant.isPlayer === true;
+		return selectedCombatantIds.filter((combatantId) => isPlayerCombatantId(combatantId) === targetIsPlayer);
+	};
+
+	const selectCombatant = (combatant: Combatant, append: boolean): void => {
+		const combatantId = combatant.id;
+		if (!append) {
+			setSelectedCombatantIds([combatantId]);
+			return;
+		}
+
+		setSelectedCombatantIds((current) => {
+			const targetIsPlayer = combatant.isPlayer === true;
+			const sameTypeSelection = current.filter((candidateId) => isPlayerCombatantId(candidateId) === targetIsPlayer);
+			if (sameTypeSelection.includes(combatantId)) {
+				return sameTypeSelection.filter((candidateId) => candidateId !== combatantId);
+			}
+			return sameTypeSelection.concat(combatantId);
+		});
+	};
+
+	const openCombatantContextMenu = (event: MouseEvent, combatant: Combatant): void => {
+		event.preventDefault();
+		const rowWasSelected = selectedCombatantIds.includes(combatant.id);
+		const selection = getContextSelection(combatant);
+		const selectionSet = new Set(selection);
+		const orderedSelection =
+			session?.combatants.filter((candidate) => selectionSet.has(candidate.id)).map((candidate) => candidate.id) ?? selection;
+		if (!rowWasSelected) {
+			setSelectedCombatantIds([combatant.id]);
+		}
+		const menu = new Menu();
+
+		if (combatant.isPlayer === true) {
+			menu.addItem((item) =>
+				item
+					.setTitle(orderedSelection.length > 1 ? `Kick (${orderedSelection.length})` : "Kick")
+					.setIcon("user-x")
+					.setDisabled(!model.serverRunning)
+					.onClick(() => {
+						actions.onKickPlayers(orderedSelection);
+					}),
+			);
+			menu.showAtMouseEvent(event);
+			return;
+		}
+
+		const firstMonsterId = orderedSelection[0] ?? combatant.id;
+		if (orderedSelection.length === 1) {
+			menu.addItem((item) =>
+				item.setTitle("Set active").setIcon("play").onClick(() => {
+					actions.onActivateCombatant(firstMonsterId);
+				}),
+			);
+		}
+		menu.addItem((item) =>
+			item
+				.setTitle(orderedSelection.length > 1 ? `Damage / heal (${orderedSelection.length})` : "Damage / heal")
+				.setIcon("sword")
+				.onClick(() => {
+					actions.onDamageHealCombatants(orderedSelection);
+				}),
+		);
+		if (orderedSelection.length === 1) {
+			menu.addItem((item) =>
+				item.setTitle("Rename").setIcon("pencil").onClick(() => {
+					actions.onRenameCombatant(firstMonsterId);
+				}),
+			);
+		}
+		menu.addItem((item) =>
+			item
+				.setTitle(orderedSelection.length > 1 ? `Duplicate (${orderedSelection.length})` : "Duplicate")
+				.setIcon("copy")
+				.onClick(() => {
+					actions.onDuplicateCombatants(orderedSelection);
+				}),
+		);
+		menu.addItem((item) =>
+			item
+				.setTitle(orderedSelection.length > 1 ? `Delete (${orderedSelection.length})` : "Delete")
+				.setIcon("trash")
+				.onClick(() => {
+					actions.onDeleteCombatants(orderedSelection);
+				}),
+		);
+		menu.showAtMouseEvent(event);
+	};
 
 	const beginCombatantDrag = (combatantId: string): void => {
 		setDraggingCombatantId(combatantId);
@@ -245,7 +355,13 @@ export function DashboardPanel({ model, actions }: DashboardPanelProps) {
 	// Render branch: either active combatants or an empty-state hint.
 	// Toolbar is always shown so encounter controls remain reachable.
 	return (
-		<div ref={dashboardRootRef} className="encounter-cast-dashboard">
+		<div
+			ref={dashboardRootRef}
+			className="encounter-cast-dashboard"
+			onClick={() => {
+				setSelectedCombatantIds([]);
+			}}
+		>
 			<section className="encounter-cast-dashboard-encounter">
 				<div className="encounter-cast-dashboard-panel-header">
 					<div className="encounter-cast-dashboard-encounter-header-copy">
@@ -259,18 +375,27 @@ export function DashboardPanel({ model, actions }: DashboardPanelProps) {
 				</div>
 
 				{session ? (
-					<div className="encounter-cast-dashboard-combatants">
+					<div
+						className="encounter-cast-dashboard-combatants"
+						onClick={(event) => {
+							if (event.target === event.currentTarget) {
+								setSelectedCombatantIds([]);
+							}
+						}}
+					>
 						{session.combatants.map((combatant, index) => (
 							<CombatantRow
 								key={combatant.id}
 								combatant={combatant}
 								index={index}
 								isActive={index === session.activeIndex}
+								isSelected={selectedCombatantIds.includes(combatant.id)}
 								encounterRunning={model.encounterRunning}
-								serverRunning={model.serverRunning}
 								isDragTarget={draggingCombatantId !== null && dragTargetIndex === index}
 								isWrapped={wrappedRows[combatant.id] === true}
 								actions={actions}
+								onSelect={selectCombatant}
+								onContextMenu={openCombatantContextMenu}
 								onRowRef={bindCombatantRowRef}
 								onTailRef={bindCombatantTailRef}
 								onDragStart={beginCombatantDrag}
@@ -285,7 +410,14 @@ export function DashboardPanel({ model, actions }: DashboardPanelProps) {
 				)}
 			</section>
 
-			<div className="encounter-cast-dashboard-floating-controls" role="toolbar" aria-label="Encounter controls">
+			<div
+				className="encounter-cast-dashboard-floating-controls"
+				role="toolbar"
+				aria-label="Encounter controls"
+				onClick={(event) => {
+					event.stopPropagation();
+				}}
+			>
 				<IconButton
 					icon={model.encounterRunning ? "square" : "play"}
 					title={model.encounterRunning ? "Stop encounter" : "Start encounter"}
@@ -566,11 +698,13 @@ interface CombatantRowProps {
 	combatant: Combatant;
 	index: number;
 	isActive: boolean;
+	isSelected: boolean;
 	encounterRunning: boolean;
-	serverRunning: boolean;
 	isDragTarget: boolean;
 	isWrapped: boolean;
 	actions: DashboardActions;
+	onSelect: (combatant: Combatant, append: boolean) => void;
+	onContextMenu: (event: MouseEvent, combatant: Combatant) => void;
 	onRowRef: (combatantId: string, element: HTMLDivElement | null) => void;
 	onTailRef: (combatantId: string, element: HTMLDivElement | null) => void;
 	onDragStart: (combatantId: string) => void;
@@ -584,11 +718,13 @@ function CombatantRow({
 	combatant,
 	index,
 	isActive,
+	isSelected,
 	encounterRunning,
-	serverRunning,
 	isDragTarget,
 	isWrapped,
 	actions,
+	onSelect,
+	onContextMenu,
 	onRowRef,
 	onTailRef,
 	onDragStart,
@@ -611,56 +747,14 @@ function CombatantRow({
 			: "Rolled initiative"
 		: "Initiative modifier";
 
-	const openContextMenu = (event: MouseEvent): void => {
-		event.preventDefault();
-		const menu = new Menu();
-
-		if (isPlayerCombatant) {
-			menu.addItem((item) =>
-				item
-					.setTitle("Kick")
-					.setIcon("user-x")
-					.setDisabled(!serverRunning)
-					.onClick(() => {
-						actions.onKickPlayer(combatant.id);
-					}),
-			);
-			menu.showAtMouseEvent(event);
-			return;
-		}
-
-		menu.addItem((item) =>
-			item.setTitle("Set active").setIcon("play").onClick(() => {
-				actions.onActivateCombatant(combatant.id);
-			}),
-		);
-		menu.addItem((item) =>
-			item.setTitle("Damage / heal").setIcon("sword").onClick(() => {
-				actions.onDamageHealCombatant(combatant.id);
-			}),
-		);
-		menu.addItem((item) =>
-			item.setTitle("Rename").setIcon("pencil").onClick(() => {
-				actions.onRenameCombatant(combatant.id);
-			}),
-		);
-		menu.addItem((item) =>
-			item.setTitle("Duplicate").setIcon("copy").onClick(() => {
-				actions.onDuplicateCombatant(combatant.id);
-			}),
-		);
-		menu.addItem((item) =>
-			item.setTitle("Delete").setIcon("trash").onClick(() => {
-				actions.onDeleteCombatant(combatant.id);
-			}),
-		);
-		menu.showAtMouseEvent(event);
-	};
-
 	return (
 		<div
 			ref={(element) => onRowRef(combatant.id, element)}
-			className={`encounter-cast-combatant ${isActive ? "is-active" : ""} ${isDragTarget ? "is-drop-target" : ""} ${isWrapped ? "is-wrapped" : ""}`}
+			className={`encounter-cast-combatant ${isActive ? "is-active" : ""} ${isSelected ? "is-selected" : ""} ${isDragTarget ? "is-drop-target" : ""} ${isWrapped ? "is-wrapped" : ""}`}
+			onClick={(event) => {
+				event.stopPropagation();
+				onSelect(combatant, event.ctrlKey || event.metaKey);
+			}}
 			onDragOver={(event) => {
 				event.preventDefault();
 			}}
@@ -671,7 +765,9 @@ function CombatantRow({
 				event.preventDefault();
 				onDropOn(index);
 			}}
-			onContextMenu={openContextMenu}
+			onContextMenu={(event) => {
+				onContextMenu(event, combatant);
+			}}
 		>
 			<div
 				className="encounter-cast-combatant-drag-handle"

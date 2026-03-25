@@ -116,6 +116,11 @@
 	border: 1px solid var(--background-modifier-border);
 }
 
+.encounter-cast-combatant.is-selected {
+	background: var(--background-modifier-hover);
+	border-color: var(--background-modifier-border-hover);
+}
+
 .encounter-cast-combatant.is-active {
 	border-color: var(--interactive-accent);
 	box-shadow: inset 0 0 0 1px var(--interactive-accent);
@@ -522,7 +527,6 @@
 .encounter-cast-dashboard-icon-button.has-divider .encounter-cast-dashboard-icon {
 	transform: translateX(0.5px);
 }
-
 
 
 
