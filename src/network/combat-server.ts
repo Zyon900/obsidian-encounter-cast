@@ -144,6 +144,39 @@ export class CombatServer {
 		this.onSessionChange = callback;
 	}
 
+	kickPlayerByCombatantId(combatantId: string): boolean {
+		const player = Array.from(this.players.values()).find((candidate) => candidate.combatantId === combatantId) ?? null;
+		if (!player) {
+			return false;
+		}
+		return this.kickPlayer(player.playerId);
+	}
+
+	kickPlayer(playerId: string): boolean {
+		const player = this.players.get(playerId);
+		if (!player) {
+			return false;
+		}
+
+		const clients = this.sseClients.get(playerId);
+		if (clients) {
+			for (const client of clients) {
+				this.sendSse(client, "player_kicked", { ok: true, message: "You were removed from this encounter." });
+				client.end();
+			}
+			this.sseClients.delete(playerId);
+		}
+
+		this.players.delete(playerId);
+		if (this.activeSession) {
+			this.activeSession = this.removeCombatantFromSession(this.activeSession, player.combatantId);
+		}
+
+		this.emitStateSyncToAllPlayers();
+		this.onSessionChange?.(this.activeSession);
+		return true;
+	}
+
 	private async handleRequest(req: IncomingMessage, res: ServerResponse, token: string): Promise<void> {
 		try {
 			this.applySecurityHeaders(res);
@@ -301,6 +334,28 @@ export class CombatServer {
 		player.lastSeenAt = new Date().toISOString();
 		this.emitStateSyncToAllPlayers();
 		this.onSessionChange?.(this.activeSession);
+	}
+
+	private removeCombatantFromSession(session: CombatSession, combatantId: string): CombatSession {
+		const currentIndex = session.combatants.findIndex((candidate) => candidate.id === combatantId);
+		if (currentIndex === -1) {
+			return session;
+		}
+
+		const nextCombatants = session.combatants.filter((candidate) => candidate.id !== combatantId);
+		const nextActiveIndex = nextCombatants.length === 0
+			? 0
+			: session.activeIndex > currentIndex
+				? session.activeIndex - 1
+				: Math.min(session.activeIndex, nextCombatants.length - 1);
+
+		return {
+			...session,
+			combatants: nextCombatants,
+			activeIndex: nextActiveIndex,
+			round: nextCombatants.length > 0 ? session.round : 1,
+			updatedAt: new Date().toISOString(),
+		};
 	}
 
 	private handleInitiativeSubmit(payload: InitiativeSubmitPayload): boolean {

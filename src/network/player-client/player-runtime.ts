@@ -115,6 +115,17 @@ export function bootPlayerClient(config: PlayerClientBootConfig): void {
 		body.appendChild(wrap);
 	}
 
+	function renderKickedScreen(message: string): void {
+		const body = document.body;
+		clearChildren(body);
+		const wrap = createEl("div", { className: "shutdown-screen" });
+		const card = createEl("div", { className: "shutdown-card" });
+		card.appendChild(createEl("h2", { text: "Removed from encounter" }));
+		card.appendChild(createEl("p", { text: message }));
+		wrap.appendChild(card);
+		body.appendChild(wrap);
+	}
+
 	function renderSheetSummary(self: PlayerCombatant | null): void {
 		clearChildren(sheetSummary);
 		const row = createEl("div", { className: "sheet-player-summary" });
@@ -272,6 +283,18 @@ export function bootPlayerClient(config: PlayerClientBootConfig): void {
 		closeInitiativeGate();
 		clearChildren(listEl);
 		renderShutdownScreen();
+	}
+
+	function handlePlayerKicked(message: string): void {
+		stream?.close();
+		stream = null;
+		playerId = "";
+		localStorage.removeItem("encounter-cast-player-id");
+		const reason = message || "You were removed from this encounter.";
+		statusEl.textContent = reason;
+		closeInitiativeGate();
+		clearChildren(listEl);
+		renderKickedScreen(reason);
 	}
 
 	function openQrPanel(): void {
@@ -637,6 +660,14 @@ export function bootPlayerClient(config: PlayerClientBootConfig): void {
 				return;
 			}
 			handleServerShutdown("Encounter server has shut down.");
+		});
+		stream.addEventListener("player_kicked", (event: MessageEvent<string>) => {
+			const parsed = parseJson(event.data);
+			if (isRecord(parsed) && typeof parsed.message === "string") {
+				handlePlayerKicked(parsed.message);
+				return;
+			}
+			handlePlayerKicked("You were removed from this encounter.");
 		});
 		async function handleStreamError(): Promise<void> {
 			if (serverShutDown) {

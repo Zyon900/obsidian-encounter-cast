@@ -1,4 +1,4 @@
-import { setIcon } from "obsidian";
+import { Menu, setIcon } from "obsidian";
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import type { Combatant } from "../../encounter/combat-session";
 import { MonsterHoverPreviewTrigger } from "../monsters/monster-hover-preview-trigger";
@@ -267,6 +267,7 @@ export function DashboardPanel({ model, actions }: DashboardPanelProps) {
 								index={index}
 								isActive={index === session.activeIndex}
 								encounterRunning={model.encounterRunning}
+								serverRunning={model.serverRunning}
 								isDragTarget={draggingCombatantId !== null && dragTargetIndex === index}
 								isWrapped={wrappedRows[combatant.id] === true}
 								actions={actions}
@@ -566,6 +567,7 @@ interface CombatantRowProps {
 	index: number;
 	isActive: boolean;
 	encounterRunning: boolean;
+	serverRunning: boolean;
 	isDragTarget: boolean;
 	isWrapped: boolean;
 	actions: DashboardActions;
@@ -583,6 +585,7 @@ function CombatantRow({
 	index,
 	isActive,
 	encounterRunning,
+	serverRunning,
 	isDragTarget,
 	isWrapped,
 	actions,
@@ -608,6 +611,52 @@ function CombatantRow({
 			: "Rolled initiative"
 		: "Initiative modifier";
 
+	const openContextMenu = (event: MouseEvent): void => {
+		event.preventDefault();
+		const menu = new Menu();
+
+		if (isPlayerCombatant) {
+			menu.addItem((item) =>
+				item
+					.setTitle("Kick")
+					.setIcon("user-x")
+					.setDisabled(!serverRunning)
+					.onClick(() => {
+						actions.onKickPlayer(combatant.id);
+					}),
+			);
+			menu.showAtMouseEvent(event);
+			return;
+		}
+
+		menu.addItem((item) =>
+			item.setTitle("Set active").setIcon("play").onClick(() => {
+				actions.onActivateCombatant(combatant.id);
+			}),
+		);
+		menu.addItem((item) =>
+			item.setTitle("Damage / heal").setIcon("sword").onClick(() => {
+				actions.onDamageHealCombatant(combatant.id);
+			}),
+		);
+		menu.addItem((item) =>
+			item.setTitle("Rename").setIcon("pencil").onClick(() => {
+				actions.onRenameCombatant(combatant.id);
+			}),
+		);
+		menu.addItem((item) =>
+			item.setTitle("Duplicate").setIcon("copy").onClick(() => {
+				actions.onDuplicateCombatant(combatant.id);
+			}),
+		);
+		menu.addItem((item) =>
+			item.setTitle("Delete").setIcon("trash").onClick(() => {
+				actions.onDeleteCombatant(combatant.id);
+			}),
+		);
+		menu.showAtMouseEvent(event);
+	};
+
 	return (
 		<div
 			ref={(element) => onRowRef(combatant.id, element)}
@@ -622,6 +671,7 @@ function CombatantRow({
 				event.preventDefault();
 				onDropOn(index);
 			}}
+			onContextMenu={openContextMenu}
 		>
 			<div
 				className="encounter-cast-combatant-drag-handle"
@@ -751,6 +801,3 @@ function MonsterInfoButton({ onClick }: { onClick: () => void }) {
 		</button>
 	);
 }
-
-
-

@@ -26,6 +26,7 @@ import { CombatServer } from "./network/combat-server";
 import type { PlayerTheme } from "./network/player-events";
 import type { CodeblockRow } from "./ui/encounter/codeblock-widget";
 import { PartySettingsModal } from "./ui/encounter/party-settings-modal";
+import { CombatantRenameModal } from "./ui/dashboard/combatant-rename-modal";
 import { InviteQrModal } from "./ui/dashboard/invite-qr-modal";
 import { pickMonsterNameOrCustom, pickMonsterOrCustom } from "./ui/dashboard/add-monster-picker";
 import { DashboardItemView, DASHBOARD_VIEW_TYPE } from "./ui/dashboard/dashboard-item-view";
@@ -98,6 +99,21 @@ export default class EncounterCastPlugin extends Plugin {
 					},
 					onMoveCombatantToIndex: (combatantId, targetIndex) => {
 						this.reorderCombatantToIndex(combatantId, targetIndex);
+					},
+					onDamageHealCombatant: (combatantId) => {
+						this.openDamageHealPlaceholder(combatantId);
+					},
+					onRenameCombatant: (combatantId) => {
+						this.renameCombatant(combatantId);
+					},
+					onDeleteCombatant: (combatantId) => {
+						this.deleteCombatant(combatantId);
+					},
+					onDuplicateCombatant: (combatantId) => {
+						this.duplicateCombatant(combatantId);
+					},
+					onKickPlayer: (combatantId) => {
+						this.kickPlayerCombatant(combatantId);
 					},
 					onSetHp: (combatantId, value) => {
 						this.updateCombatantHp(combatantId, value);
@@ -683,6 +699,134 @@ export default class EncounterCastPlugin extends Plugin {
 			return;
 		}
 		this.updateSession(moveCombatant(this.currentSession, combatantId, targetIndex));
+	}
+
+	private openDamageHealPlaceholder(combatantId: string): void {
+		const combatant = this.currentSession?.combatants.find((candidate) => candidate.id === combatantId) ?? null;
+		if (!combatant) {
+			return;
+		}
+		new Notice(`Damage / heal for ${combatant.name} is not implemented yet.`);
+	}
+
+	private renameCombatant(combatantId: string): void {
+		if (!this.currentSession) {
+			return;
+		}
+		const combatant = this.currentSession.combatants.find((candidate) => candidate.id === combatantId) ?? null;
+		if (!combatant || combatant.isPlayer === true) {
+			return;
+		}
+
+		new CombatantRenameModal(this.app, combatant.name, (nextName) => {
+			if (!this.currentSession) {
+				return;
+			}
+			const trimmed = nextName.trim();
+			const resolvedName = trimmed.length > 0 ? trimmed : combatant.monsterName;
+			if (resolvedName === combatant.name) {
+				return;
+			}
+
+			const nextCombatants = this.currentSession.combatants.map((candidate) =>
+				candidate.id === combatantId
+					? {
+							...candidate,
+							name: resolvedName,
+						}
+					: candidate,
+			);
+			this.updateSession({
+				...this.currentSession,
+				combatants: nextCombatants,
+				updatedAt: new Date().toISOString(),
+			});
+		}).open();
+	}
+
+	private deleteCombatant(combatantId: string): void {
+		if (!this.currentSession) {
+			return;
+		}
+		const combatant = this.currentSession.combatants.find((candidate) => candidate.id === combatantId) ?? null;
+		if (!combatant || combatant.isPlayer === true) {
+			return;
+		}
+
+		const next = this.removeCombatantFromSession(this.currentSession, combatantId);
+		if (!next) {
+			return;
+		}
+		this.updateSession(next);
+	}
+
+	private duplicateCombatant(combatantId: string): void {
+		if (!this.currentSession) {
+			return;
+		}
+		const index = this.currentSession.combatants.findIndex((candidate) => candidate.id === combatantId);
+		if (index === -1) {
+			return;
+		}
+		const combatant = this.currentSession.combatants[index];
+		if (!combatant || combatant.isPlayer === true) {
+			return;
+		}
+
+		const duplicate = {
+			...combatant,
+			id: `combatant-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+			name: `${combatant.name} copy`,
+		};
+		const nextCombatants = this.currentSession.combatants.slice();
+		nextCombatants.splice(index + 1, 0, duplicate);
+		this.updateSession({
+			...this.currentSession,
+			combatants: nextCombatants,
+			updatedAt: new Date().toISOString(),
+		});
+	}
+
+	private kickPlayerCombatant(combatantId: string): void {
+		if (!this.currentSession) {
+			return;
+		}
+		if (!this.encounterServer.getState().running) {
+			new Notice("Encounter server is offline.");
+			return;
+		}
+		const combatant = this.currentSession.combatants.find((candidate) => candidate.id === combatantId) ?? null;
+		if (!combatant || combatant.isPlayer !== true) {
+			return;
+		}
+
+		const kicked = this.encounterServer.kickPlayerByCombatantId(combatantId);
+		if (!kicked) {
+			new Notice("Failed to kick player.");
+			return;
+		}
+		new Notice(`Kicked ${combatant.name}.`);
+	}
+
+	private removeCombatantFromSession(session: CombatSession, combatantId: string): CombatSession | null {
+		const currentIndex = session.combatants.findIndex((candidate) => candidate.id === combatantId);
+		if (currentIndex === -1) {
+			return null;
+		}
+
+		const nextCombatants = session.combatants.filter((candidate) => candidate.id !== combatantId);
+		const nextActiveIndex = nextCombatants.length === 0
+			? 0
+			: session.activeIndex > currentIndex
+				? session.activeIndex - 1
+				: Math.min(session.activeIndex, nextCombatants.length - 1);
+		return {
+			...session,
+			combatants: nextCombatants,
+			activeIndex: nextActiveIndex,
+			round: nextCombatants.length > 0 ? session.round : 1,
+			updatedAt: new Date().toISOString(),
+		};
 	}
 
 	private updateCombatantHp(combatantId: string, value: string): void {
