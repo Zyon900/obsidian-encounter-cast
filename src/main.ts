@@ -26,6 +26,7 @@ import { CombatServer } from "./network/combat-server";
 import type { PlayerTheme } from "./network/player-events";
 import type { CodeblockRow } from "./ui/encounter/codeblock-widget";
 import { PartySettingsModal } from "./ui/encounter/party-settings-modal";
+import { InviteQrModal } from "./ui/dashboard/invite-qr-modal";
 import { pickMonsterNameOrCustom, pickMonsterOrCustom } from "./ui/dashboard/add-monster-picker";
 import { DashboardItemView, DASHBOARD_VIEW_TYPE } from "./ui/dashboard/dashboard-item-view";
 import type { DashboardViewModel } from "./ui/dashboard/types";
@@ -76,6 +77,9 @@ export default class EncounterCastPlugin extends Plugin {
 					},
 					onCopyInvite: (url) => {
 						void this.copyInviteLink(url);
+					},
+					onShowInviteQr: (url) => {
+						this.openInviteQrModal(url);
 					},
 					onNextTurn: () => {
 						this.advanceTurn();
@@ -797,6 +801,10 @@ export default class EncounterCastPlugin extends Plugin {
 		} catch {
 			new Notice("Failed to copy invite link.");
 		}
+	}
+
+	private openInviteQrModal(url: string): void {
+		new InviteQrModal(this.app, url).open();
 	}
 
 	private async updatePartySettings(settings: EncounterPartySettings): Promise<void> {

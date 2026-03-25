@@ -1,4 +1,3 @@
-import QRCode from "qrcode";
 import { setIcon } from "obsidian";
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import type { Combatant } from "../../encounter/combat-session";
@@ -42,7 +41,6 @@ function areWrappedMapsEqual(
 }
 // Main dashboard view: renders combatants, encounter controls, and QR modal.
 export function DashboardPanel({ model, actions }: DashboardPanelProps) {
-	const [isQrOpen, setIsQrOpen] = useState(false);
 	const [draggingCombatantId, setDraggingCombatantId] = useState<string | null>(null);
 	const [dragTargetIndex, setDragTargetIndex] = useState<number | null>(null);
 	const [wrappedRows, setWrappedRows] = useState<Record<string, boolean>>({});
@@ -325,19 +323,14 @@ export function DashboardPanel({ model, actions }: DashboardPanelProps) {
 				<IconButton
 					icon="qr-code"
 					title="Show QR code"
-					onClick={() => setIsQrOpen(true)}
+					onClick={() => {
+						if (primaryInvite) {
+							actions.onShowInviteQr(primaryInvite);
+						}
+					}}
 					disabled={!primaryInvite}
 				/>
 			</div>
-
-			{isQrOpen && primaryInvite ? (
-				<QrCodeModal
-					url={primaryInvite}
-					onClose={() => {
-						setIsQrOpen(false);
-					}}
-				/>
-			) : null}
 		</div>
 	);
 }
@@ -568,63 +561,6 @@ function IconButton({
 	);
 }
 
-// Simple modal that renders an invite QR from the active invite URL.
-function QrCodeModal({ url, onClose }: { url: string; onClose: () => void }) {
-	const [svg, setSvg] = useState<string | null>(null);
-	const [error, setError] = useState<string | null>(null);
-
-	useEffect(() => {
-		let cancelled = false;
-		setSvg(null);
-		setError(null);
-		void QRCode.toString(url, {
-			type: "svg",
-			margin: 1,
-			width: 240,
-		}).then(
-			(markup: string) => {
-				if (!cancelled) {
-					setSvg(markup);
-				}
-			},
-			() => {
-				if (!cancelled) {
-					setError("QR code unavailable.");
-				}
-			},
-		);
-
-		return () => {
-			cancelled = true;
-		};
-	}, [url]);
-
-	return (
-		<div className="encounter-cast-dashboard-modal-backdrop" onClick={onClose}>
-			<div
-				className="encounter-cast-dashboard-modal"
-				role="dialog"
-				aria-modal="true"
-				aria-label="Invite QR code"
-				onClick={(event) => event.stopPropagation()}
-			>
-				<div className="encounter-cast-dashboard-modal-header">
-					<h3>Invite QR code</h3>
-					<button type="button" onClick={onClose} aria-label="Close QR code modal" title="Close">
-						×
-					</button>
-				</div>
-				{svg ? (
-					<div className="encounter-cast-dashboard-qr-frame" dangerouslySetInnerHTML={{ __html: svg }} />
-				) : (
-					<p>{error ?? "Generating QR code..."}</p>
-				)}
-				<code>{url}</code>
-			</div>
-		</div>
-	);
-}
-
 interface CombatantRowProps {
 	combatant: Combatant;
 	index: number;
@@ -815,7 +751,6 @@ function MonsterInfoButton({ onClick }: { onClick: () => void }) {
 		</button>
 	);
 }
-
 
 
 

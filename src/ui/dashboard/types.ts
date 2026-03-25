@@ -16,6 +16,7 @@ export interface DashboardActions {
 	onStartServer: () => void;
 	onStopServer: () => void;
 	onCopyInvite: (url: string) => void;
+	onShowInviteQr: (url: string) => void;
 	onNextTurn: () => void;
 	onAddMonster: () => void;
 	onClearMonsters: () => void;
@@ -31,4 +32,3 @@ export interface DashboardActions {
 	onHoverMonster: (monster: MonsterRecord, anchorEl: HTMLElement) => void;
 	onMonsterHoverLeave: () => void;
 }
-
