@@ -34,6 +34,8 @@ export class FantasyStatblocksAdapter {
 	private hoverContainer: HTMLElement | null = null;
 	private hoverComponent: Component | null = null;
 	private hoverHideTimeout: number | null = null;
+	private hoverAnchorEl: HTMLElement | null = null;
+	private hoverResizeObserver: ResizeObserver | null = null;
 	private hoverWidthPx = 460;
 	private hoverWideColumns = false;
 
@@ -94,6 +96,7 @@ export class FantasyStatblocksAdapter {
 
 		this.clearHoverHideTimeout();
 		this.hideCreatureHoverPreview();
+		this.hoverAnchorEl = anchorEl;
 		this.hoverContainer.empty();
         this.hoverContainer.addClass("is-visible");
 		this.hoverComponent = api.render(creatureToRender, this.hoverContainer);
@@ -115,6 +118,7 @@ export class FantasyStatblocksAdapter {
 		this.clearHoverHideTimeout();
 		this.hoverComponent?.unload();
 		this.hoverComponent = null;
+		this.hoverAnchorEl = null;
 		if (this.hoverContainer) {
             this.hoverContainer.removeClass("is-visible");
 			this.hoverContainer.empty();
@@ -172,6 +176,7 @@ export class FantasyStatblocksAdapter {
 		document.body.appendChild(container);
 		this.hoverContainer = container;
 		this.applyHoverContainerLayout();
+		this.ensureHoverResizeObserver();
 	}
 
 	private applyHoverContainerLayout(): void {
@@ -208,6 +213,7 @@ export class FantasyStatblocksAdapter {
 		this.hoverContainer.style.top = `${top}px`;
 		this.hoverContainer.style.left = `${left}px`;
 		this.correctHorizontalOverflow(margin);
+		this.correctVerticalOverflow(margin);
 	}
 
 	private clamp(value: number, min: number, max: number): number {
@@ -264,6 +270,51 @@ export class FantasyStatblocksAdapter {
 			const shiftRight = leftLimit - pageRectLeft;
 			this.hoverContainer.style.left = `${currentLeft + shiftRight}px`;
 		}
+	}
+
+	private correctVerticalOverflow(margin: number): void {
+		if (!this.hoverContainer) {
+			return;
+		}
+
+		const viewport = this.getViewportBounds();
+		const rect = this.hoverContainer.getBoundingClientRect();
+		const topLimit = viewport.top + margin;
+		const bottomLimit = viewport.top + viewport.height - margin;
+		const currentTop = Number.parseFloat(this.hoverContainer.style.top);
+		if (!Number.isFinite(currentTop)) {
+			return;
+		}
+
+		const pageRectTop = rect.top + window.scrollY;
+		const pageRectBottom = rect.bottom + window.scrollY;
+		if (pageRectBottom > bottomLimit) {
+			const shiftUp = pageRectBottom - bottomLimit;
+			this.hoverContainer.style.top = `${Math.max(topLimit, currentTop - shiftUp)}px`;
+			return;
+		}
+		if (pageRectTop < topLimit) {
+			const shiftDown = topLimit - pageRectTop;
+			this.hoverContainer.style.top = `${currentTop + shiftDown}px`;
+		}
+	}
+
+	private ensureHoverResizeObserver(): void {
+		if (this.hoverResizeObserver || typeof ResizeObserver === "undefined" || !this.hoverContainer) {
+			return;
+		}
+
+		this.hoverResizeObserver = new ResizeObserver(() => {
+			if (!this.hoverContainer?.classList.contains("is-visible")) {
+				return;
+			}
+			const anchor = this.hoverAnchorEl;
+			if (!anchor || !anchor.isConnected) {
+				return;
+			}
+			this.positionHoverContainer(anchor);
+		});
+		this.hoverResizeObserver.observe(this.hoverContainer);
 	}
 
 	private clearHoverHideTimeout(): void {
