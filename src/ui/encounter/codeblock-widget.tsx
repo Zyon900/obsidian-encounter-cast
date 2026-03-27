@@ -24,6 +24,8 @@ interface CodeblockWidgetProps {
 	title: string | null;
 	rows: CodeblockRow[];
 	partySettings: EncounterPartySettings;
+	hoverPreviewEnabled: boolean;
+	hoverPreviewDelayMs: number;
 	onInfo: (monster: MonsterRecord) => void;
 	onHoverInfo: (monster: MonsterRecord, anchorEl: HTMLElement) => void;
 	onHoverLeave: () => void;
@@ -216,6 +218,8 @@ export function CodeblockWidget(props: CodeblockWidgetProps) {
 							<MonsterHoverPreviewTrigger
 								monster={row.monster}
 								className="encounter-cast-encounter-row-name"
+								enabled={props.hoverPreviewEnabled}
+								delayMs={props.hoverPreviewDelayMs}
 								onHoverInfo={props.onHoverInfo}
 								onHoverLeave={props.onHoverLeave}
 							>

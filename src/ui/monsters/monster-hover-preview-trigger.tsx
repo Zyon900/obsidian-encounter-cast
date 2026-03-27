@@ -5,6 +5,7 @@ import type { MonsterRecord } from "../../monsters/types";
 interface MonsterHoverPreviewTriggerProps {
 	monster: MonsterRecord | null;
 	className?: string;
+	enabled?: boolean;
 	delayMs?: number;
 	onHoverInfo: (monster: MonsterRecord, anchorEl: HTMLElement) => void;
 	onHoverLeave: () => void;
@@ -16,6 +17,7 @@ interface MonsterHoverPreviewTriggerProps {
 export function MonsterHoverPreviewTrigger({
 	monster,
 	className,
+	enabled = true,
 	delayMs = 500,
 	onHoverInfo,
 	onHoverLeave,
@@ -23,6 +25,17 @@ export function MonsterHoverPreviewTrigger({
 }: MonsterHoverPreviewTriggerProps) {
 	const triggerRef = useRef<HTMLSpanElement | null>(null);
 	const hoverTimeoutRef = useRef<number | null>(null);
+
+	useEffect(() => {
+		if (enabled) {
+			return;
+		}
+		if (hoverTimeoutRef.current !== null) {
+			window.clearTimeout(hoverTimeoutRef.current);
+			hoverTimeoutRef.current = null;
+		}
+		onHoverLeave();
+	}, [enabled, onHoverLeave]);
 
 	useEffect(() => {
 		return () => {
@@ -34,7 +47,7 @@ export function MonsterHoverPreviewTrigger({
 	}, []);
 
 	const startHoverPreview = () => {
-		if (!monster || !triggerRef.current) {
+		if (!enabled || !monster || !triggerRef.current) {
 			return;
 		}
 
@@ -54,7 +67,9 @@ export function MonsterHoverPreviewTrigger({
 			window.clearTimeout(hoverTimeoutRef.current);
 			hoverTimeoutRef.current = null;
 		}
-		onHoverLeave();
+		if (enabled) {
+			onHoverLeave();
+		}
 	};
 
 	return (

@@ -8,6 +8,8 @@ interface CodeblockRenderChildProps {
 	title: string | null;
 	rows: CodeblockRow[];
 	partySettings: EncounterPartySettings;
+	hoverPreviewEnabled: boolean;
+	hoverPreviewDelayMs: number;
 	onInfo: (monster: MonsterRecord) => void;
 	onHoverInfo: (monster: MonsterRecord, anchorEl: HTMLElement) => void;
 	onHoverLeave: () => void;
@@ -41,12 +43,19 @@ export class CodeblockRenderChild extends MarkdownRenderChild {
 		this.renderWidget();
 	}
 
+	updateHoverPreviewSettings(hoverPreviewEnabled: boolean, hoverPreviewDelayMs: number): void {
+		this.props = { ...this.props, hoverPreviewEnabled, hoverPreviewDelayMs };
+		this.renderWidget();
+	}
+
 	private renderWidget(): void {
 		render(
 			<CodeblockWidget
 				title={this.props.title}
 				rows={this.props.rows}
 				partySettings={this.props.partySettings}
+				hoverPreviewEnabled={this.props.hoverPreviewEnabled}
+				hoverPreviewDelayMs={this.props.hoverPreviewDelayMs}
 				onInfo={this.props.onInfo}
 				onHoverInfo={this.props.onHoverInfo}
 				onHoverLeave={this.props.onHoverLeave}

@@ -12,6 +12,8 @@ const EMPTY_MODEL: DashboardViewModel = {
 	serverPort: null,
 	roomToken: null,
 	inviteUrls: [],
+	hoverPreviewEnabled: true,
+	hoverPreviewDelayMs: 500,
 };
 
 export class DashboardItemView extends ItemView {

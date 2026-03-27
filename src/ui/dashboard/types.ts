@@ -8,6 +8,8 @@ export interface DashboardViewModel {
 	serverPort: number | null;
 	roomToken: string | null;
 	inviteUrls: string[];
+	hoverPreviewEnabled: boolean;
+	hoverPreviewDelayMs: number;
 }
 
 export interface DashboardActions {

@@ -29,17 +29,29 @@ import { PartySettingsModal } from "./ui/encounter/party-settings-modal";
 import { CombatantRenameModal } from "./ui/dashboard/combatant-rename-modal";
 import { DamageHealModal } from "./ui/dashboard/damage-heal-modal";
 import { InviteQrModal } from "./ui/dashboard/invite-qr-modal";
+import { EncounterCastSettingTab } from "./ui/settings/plugin-settings-tab";
 import { pickMonsterNameOrCustom, pickMonsterOrCustom } from "./ui/dashboard/add-monster-picker";
 import { DashboardItemView, DASHBOARD_VIEW_TYPE } from "./ui/dashboard/dashboard-item-view";
 import type { DashboardViewModel } from "./ui/dashboard/types";
 import { PreactMount } from "./ui/preact-mount";
 import { CleanupRegistry } from "./utils/cleanup-registry";
 
-type EncounterCastSettings = EncounterPartySettings;
+export interface EncounterCastSettings extends EncounterPartySettings {
+	hoverPreviewEnabled: boolean;
+	hoverPreviewDelayMs: number;
+	hoverPreviewHideDelayMs: number;
+	hoverPreviewWidthPx: number;
+	hoverPreviewWideColumns: boolean;
+}
 
 const DEFAULT_SETTINGS: EncounterCastSettings = {
 	partyMembers: null,
 	partyLevel: null,
+	hoverPreviewEnabled: true,
+	hoverPreviewDelayMs: 500,
+	hoverPreviewHideDelayMs: 500,
+	hoverPreviewWidthPx: 460,
+	hoverPreviewWideColumns: false,
 };
 
 export default class EncounterCastPlugin extends Plugin {
@@ -53,6 +65,10 @@ export default class EncounterCastPlugin extends Plugin {
 	private sourceWriteQueue = Promise.resolve();
 	private settings: EncounterCastSettings = { ...DEFAULT_SETTINGS };
 	private readonly encounterWidgetComponents = new Set<CodeblockRenderChild>();
+
+	getSettingsSnapshot(): EncounterCastSettings {
+		return { ...this.settings };
+	}
 
 	async onload(): Promise<void> {
 		const loadedSettings: unknown = await this.loadData();
@@ -144,6 +160,7 @@ export default class EncounterCastPlugin extends Plugin {
 		);
 
 		await this.monsterManager.initialize();
+		this.monsterManager.setHoverPreviewLayout(this.settings.hoverPreviewWidthPx, this.settings.hoverPreviewWideColumns);
 		this.encounterServer.setOnSessionChange((session) => {
 			this.currentSession = session;
 			if (!session) {
@@ -225,6 +242,8 @@ export default class EncounterCastPlugin extends Plugin {
 					partyMembers: this.settings.partyMembers,
 					partyLevel: this.settings.partyLevel,
 				},
+				hoverPreviewEnabled: this.settings.hoverPreviewEnabled,
+				hoverPreviewDelayMs: this.settings.hoverPreviewDelayMs,
 				onInfo: (monster) => {
 					void this.openMonsterInfo(monster);
 				},
@@ -257,6 +276,7 @@ export default class EncounterCastPlugin extends Plugin {
 
 		this.registerEditorSuggest(new CodeblockSuggest(this.app, this.monsterManager));
 		this.registerEditorExtension(createCodeblockEditorKeymap());
+		this.addSettingTab(new EncounterCastSettingTab(this.app, this));
 
 		const refreshOnResize = () => {
 			this.cleanupRegistry.debounce("status-refresh", 120, () => this.renderFoundationView());
@@ -308,6 +328,8 @@ export default class EncounterCastPlugin extends Plugin {
 			serverPort: serverState.port,
 			roomToken: serverState.roomToken,
 			inviteUrls: serverState.inviteUrls,
+			hoverPreviewEnabled: this.settings.hoverPreviewEnabled,
+			hoverPreviewDelayMs: this.settings.hoverPreviewDelayMs,
 		};
 	}
 
@@ -1067,8 +1089,9 @@ export default class EncounterCastPlugin extends Plugin {
 		new InviteQrModal(this.app, url).open();
 	}
 
-	private async updatePartySettings(settings: EncounterPartySettings): Promise<void> {
+	async updateEncounterPartySettings(settings: EncounterPartySettings): Promise<void> {
 		this.settings = {
+			...this.settings,
 			partyMembers: settings.partyMembers,
 			partyLevel: settings.partyLevel,
 		};
@@ -1076,12 +1099,50 @@ export default class EncounterCastPlugin extends Plugin {
 		this.refreshEncounterDifficultyViews();
 	}
 
+	async updateHoverPreviewSettings(settings: {
+		hoverPreviewEnabled: boolean;
+		hoverPreviewDelayMs: number;
+		hoverPreviewHideDelayMs: number;
+	}): Promise<void> {
+		const hoverPreviewDelayMs = normalizeHoverDelay(settings.hoverPreviewDelayMs, DEFAULT_SETTINGS.hoverPreviewDelayMs);
+		const hoverPreviewHideDelayMs = normalizeHoverDelay(
+			settings.hoverPreviewHideDelayMs,
+			DEFAULT_SETTINGS.hoverPreviewHideDelayMs,
+		);
+		this.settings = {
+			...this.settings,
+			hoverPreviewEnabled: settings.hoverPreviewEnabled,
+			hoverPreviewDelayMs,
+			hoverPreviewHideDelayMs,
+		};
+		await this.saveData(this.settings);
+		if (!this.settings.hoverPreviewEnabled) {
+			this.monsterManager.hideCreatureHoverPreview();
+		}
+		this.refreshEncounterHoverPreviewViews();
+		this.renderDashboardView();
+	}
+
+	async updateHoverPreviewLayoutSettings(settings: {
+		hoverPreviewWidthPx: number;
+		hoverPreviewWideColumns: boolean;
+	}): Promise<void> {
+		const hoverPreviewWidthPx = normalizeHoverWidth(settings.hoverPreviewWidthPx, DEFAULT_SETTINGS.hoverPreviewWidthPx);
+		this.settings = {
+			...this.settings,
+			hoverPreviewWidthPx,
+			hoverPreviewWideColumns: settings.hoverPreviewWideColumns,
+		};
+		await this.saveData(this.settings);
+		this.monsterManager.setHoverPreviewLayout(hoverPreviewWidthPx, settings.hoverPreviewWideColumns);
+	}
+
 	private openPartySettingsModal(): void {
 		const modal = new PartySettingsModal(
 			this.app,
 			{ partyMembers: this.settings.partyMembers, partyLevel: this.settings.partyLevel },
 			async (settings) => {
-				await this.updatePartySettings(settings);
+				await this.updateEncounterPartySettings(settings);
 				new Notice("Encounter settings saved.");
 			},
 		);
@@ -1098,6 +1159,12 @@ export default class EncounterCastPlugin extends Plugin {
 		}
 	}
 
+	private refreshEncounterHoverPreviewViews(): void {
+		for (const component of this.encounterWidgetComponents) {
+			component.updateHoverPreviewSettings(this.settings.hoverPreviewEnabled, this.settings.hoverPreviewDelayMs);
+		}
+	}
+
 	private async openMonsterInfo(monster: MonsterRecord): Promise<void> {
 		try {
 			await this.monsterManager.openCreaturePreview(monster);
@@ -1108,6 +1175,9 @@ export default class EncounterCastPlugin extends Plugin {
 	}
 
 	private async openMonsterHoverInfo(monster: MonsterRecord, anchorEl: HTMLElement): Promise<void> {
+		if (!this.settings.hoverPreviewEnabled) {
+			return;
+		}
 		try {
 			await this.monsterManager.showCreatureHoverPreview(monster, anchorEl);
 		} catch {
@@ -1116,7 +1186,7 @@ export default class EncounterCastPlugin extends Plugin {
 	}
 
 	private closeMonsterHoverInfo(): void {
-		this.monsterManager.scheduleHideCreatureHoverPreview(500);
+		this.monsterManager.scheduleHideCreatureHoverPreview(this.settings.hoverPreviewHideDelayMs);
 	}
 
 	private captureTheme(): PlayerTheme | null {
@@ -1178,9 +1248,39 @@ function mergeSettings(value: unknown): EncounterCastSettings {
 		return { ...DEFAULT_SETTINGS };
 	}
 
-	const candidate = value as Partial<EncounterPartySettings>;
+	const candidate = value as Partial<EncounterCastSettings>;
 	return {
 		partyMembers: Number.isInteger(candidate.partyMembers) ? candidate.partyMembers ?? null : null,
 		partyLevel: Number.isInteger(candidate.partyLevel) ? candidate.partyLevel ?? null : null,
+		hoverPreviewEnabled:
+			typeof candidate.hoverPreviewEnabled === "boolean"
+				? candidate.hoverPreviewEnabled
+				: DEFAULT_SETTINGS.hoverPreviewEnabled,
+		hoverPreviewDelayMs: normalizeHoverDelay(candidate.hoverPreviewDelayMs, DEFAULT_SETTINGS.hoverPreviewDelayMs),
+		hoverPreviewHideDelayMs: normalizeHoverDelay(
+			candidate.hoverPreviewHideDelayMs,
+			DEFAULT_SETTINGS.hoverPreviewHideDelayMs,
+		),
+		hoverPreviewWidthPx: normalizeHoverWidth(candidate.hoverPreviewWidthPx, DEFAULT_SETTINGS.hoverPreviewWidthPx),
+		hoverPreviewWideColumns:
+			typeof candidate.hoverPreviewWideColumns === "boolean"
+				? candidate.hoverPreviewWideColumns
+				: DEFAULT_SETTINGS.hoverPreviewWideColumns,
 	};
+}
+
+function normalizeHoverDelay(value: unknown, fallback: number): number {
+	if (typeof value !== "number" || !Number.isFinite(value)) {
+		return fallback;
+	}
+	const rounded = Math.round(value);
+	return Math.min(3000, Math.max(0, rounded));
+}
+
+function normalizeHoverWidth(value: unknown, fallback: number): number {
+	if (typeof value !== "number" || !Number.isFinite(value)) {
+		return fallback;
+	}
+	const rounded = Math.round(value);
+	return Math.min(1400, Math.max(320, rounded));
 }

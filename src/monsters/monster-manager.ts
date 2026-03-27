@@ -150,6 +150,10 @@ export class MonsterManager {
 		this.adapter.scheduleHideCreatureHoverPreview(delayMs);
 	}
 
+	setHoverPreviewLayout(widthPx: number, wideColumns: boolean): void {
+		this.adapter.setHoverPreviewLayout(widthPx, wideColumns);
+	}
+
 	private loadCacheIfNeeded(): void {
 		if (this.cacheLoaded) {
 			return;
@@ -398,6 +402,5 @@ export class MonsterManager {
 			.replace(/(^-|-$)/g, "");
 	}
 }
-
 
 

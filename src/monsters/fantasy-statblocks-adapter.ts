@@ -34,6 +34,8 @@ export class FantasyStatblocksAdapter {
 	private hoverContainer: HTMLElement | null = null;
 	private hoverComponent: Component | null = null;
 	private hoverHideTimeout: number | null = null;
+	private hoverWidthPx = 460;
+	private hoverWideColumns = false;
 
 	constructor(private readonly app: App) {}
 
@@ -127,6 +129,12 @@ export class FantasyStatblocksAdapter {
 		}, delayMs);
 	}
 
+	setHoverPreviewLayout(widthPx: number, wideColumns: boolean): void {
+		this.hoverWidthPx = widthPx;
+		this.hoverWideColumns = wideColumns;
+		this.applyHoverContainerLayout();
+	}
+
 	private requirePlugin(): FantasyStatblocksPlugin {
 		const plugin = this.host.plugins.getPlugin(FANTASY_STATBLOCKS_PLUGIN_ID) as FantasyStatblocksPlugin | null;
 		if (!plugin) {
@@ -149,6 +157,7 @@ export class FantasyStatblocksAdapter {
 
 	private ensureHoverContainer(): void {
 		if (this.hoverContainer && this.hoverContainer.isConnected) {
+			this.applyHoverContainerLayout();
 			return;
 		}
 
@@ -162,6 +171,15 @@ export class FantasyStatblocksAdapter {
 		});
 		document.body.appendChild(container);
 		this.hoverContainer = container;
+		this.applyHoverContainerLayout();
+	}
+
+	private applyHoverContainerLayout(): void {
+		if (!this.hoverContainer) {
+			return;
+		}
+		this.hoverContainer.style.setProperty("--encounter-cast-hover-preview-width", `${this.hoverWidthPx}px`);
+		this.hoverContainer.classList.toggle("is-wide", this.hoverWideColumns);
 	}
 
 	private positionHoverContainer(anchorEl: HTMLElement): void {
@@ -256,4 +274,3 @@ export class FantasyStatblocksAdapter {
 		this.hoverHideTimeout = null;
 	}
 }
-

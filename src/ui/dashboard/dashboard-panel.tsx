@@ -391,6 +391,8 @@ export function DashboardPanel({ model, actions }: DashboardPanelProps) {
 								isActive={index === session.activeIndex}
 								isSelected={selectedCombatantIds.includes(combatant.id)}
 								encounterRunning={model.encounterRunning}
+								hoverPreviewEnabled={model.hoverPreviewEnabled}
+								hoverPreviewDelayMs={model.hoverPreviewDelayMs}
 								isDragTarget={draggingCombatantId !== null && dragTargetIndex === index}
 								isWrapped={wrappedRows[combatant.id] === true}
 								actions={actions}
@@ -700,6 +702,8 @@ interface CombatantRowProps {
 	isActive: boolean;
 	isSelected: boolean;
 	encounterRunning: boolean;
+	hoverPreviewEnabled: boolean;
+	hoverPreviewDelayMs: number;
 	isDragTarget: boolean;
 	isWrapped: boolean;
 	actions: DashboardActions;
@@ -720,6 +724,8 @@ function CombatantRow({
 	isActive,
 	isSelected,
 	encounterRunning,
+	hoverPreviewEnabled,
+	hoverPreviewDelayMs,
 	isDragTarget,
 	isWrapped,
 	actions,
@@ -806,6 +812,8 @@ function CombatantRow({
 				<div className="encounter-cast-combatant-name-block">
 					<MonsterHoverPreviewTrigger
 						monster={combatant.monster}
+						enabled={hoverPreviewEnabled}
+						delayMs={hoverPreviewDelayMs}
 						onHoverInfo={actions.onHoverMonster}
 						onHoverLeave={actions.onMonsterHoverLeave}
 					>
