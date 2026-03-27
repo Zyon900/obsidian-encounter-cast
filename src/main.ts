@@ -27,6 +27,7 @@ import type { PlayerTheme } from "./network/player-events";
 import type { CodeblockRow } from "./ui/encounter/codeblock-widget";
 import { PartySettingsModal } from "./ui/encounter/party-settings-modal";
 import { CombatantRenameModal } from "./ui/dashboard/combatant-rename-modal";
+import { DamageHealModal } from "./ui/dashboard/damage-heal-modal";
 import { InviteQrModal } from "./ui/dashboard/invite-qr-modal";
 import { pickMonsterNameOrCustom, pickMonsterOrCustom } from "./ui/dashboard/add-monster-picker";
 import { DashboardItemView, DASHBOARD_VIEW_TYPE } from "./ui/dashboard/dashboard-item-view";
@@ -711,15 +712,77 @@ export default class EncounterCastPlugin extends Plugin {
 		if (targets.length === 0) {
 			return;
 		}
-		if (targets.length === 1) {
-			const target = targets[0];
-			if (!target) {
-				return;
-			}
-			new Notice(`Damage / heal for ${target.name} is not implemented yet.`);
+
+		new DamageHealModal(this.app, targets, (amount) => {
+			this.applyDamageHealToCombatants(combatantIds, amount);
+		}).open();
+	}
+
+	private applyDamageHealToCombatants(combatantIds: string[], amount: number): void {
+		if (!this.currentSession || amount === 0) {
 			return;
 		}
-		new Notice(`Damage / heal for ${targets.length} combatants is not implemented yet.`);
+
+		const selectedIds = new Set(combatantIds);
+		let affectedCount = 0;
+		let skippedCount = 0;
+		let changed = false;
+
+		const nextCombatants = this.currentSession.combatants.map((combatant) => {
+			if (!selectedIds.has(combatant.id) || combatant.isPlayer === true) {
+				return combatant;
+			}
+			if (combatant.hpCurrent === null || combatant.hpMax === null) {
+				skippedCount += 1;
+				return combatant;
+			}
+
+			const hpMax = Math.max(0, combatant.hpMax);
+			const hpCurrent = Math.max(0, Math.min(combatant.hpCurrent, hpMax));
+			const tempHpCurrent = Math.max(0, combatant.tempHp);
+			let nextHpCurrent = hpCurrent;
+			let nextTempHp = tempHpCurrent;
+			if (amount > 0) {
+				const damageRemainingAfterTemp = Math.max(0, amount - tempHpCurrent);
+				nextTempHp = Math.max(0, tempHpCurrent - amount);
+				nextHpCurrent = Math.max(0, hpCurrent - damageRemainingAfterTemp);
+			} else {
+				nextHpCurrent = Math.min(hpMax, hpCurrent + Math.abs(amount));
+			}
+			affectedCount += 1;
+			if (
+				nextHpCurrent !== combatant.hpCurrent ||
+				nextTempHp !== combatant.tempHp ||
+				hpCurrent !== combatant.hpCurrent ||
+				tempHpCurrent !== combatant.tempHp ||
+				hpMax !== combatant.hpMax
+			) {
+				changed = true;
+			}
+			return {
+				...combatant,
+				hpCurrent: nextHpCurrent,
+				tempHp: nextTempHp,
+				hpMax,
+			};
+		});
+
+		if (changed) {
+			this.updateSession({
+				...this.currentSession,
+				combatants: nextCombatants,
+				updatedAt: new Date().toISOString(),
+			});
+		}
+
+		if (affectedCount > 0) {
+			const action = amount > 0 ? "damage" : "healing";
+			const magnitude = Math.abs(amount);
+			new Notice(`Applied ${magnitude} ${action} to ${affectedCount} monster${affectedCount === 1 ? "" : "s"}.`);
+		}
+		if (skippedCount > 0) {
+			new Notice(`Skipped ${skippedCount} monster${skippedCount === 1 ? "" : "s"} with missing HP values.`);
+		}
 	}
 
 	private renameCombatant(combatantId: string): void {
