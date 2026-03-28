@@ -112,6 +112,13 @@ export function DashboardPanel({ model, actions }: DashboardPanelProps) {
 		const menu = new Menu();
 
 		if (combatant.isPlayer === true) {
+			if (orderedSelection.length === 1) {
+				menu.addItem((item) =>
+					item.setTitle("Set active").setIcon("play").onClick(() => {
+						actions.onActivateCombatant(combatant.id);
+					}),
+				);
+			}
 			menu.addItem((item) =>
 				item
 					.setTitle(orderedSelection.length > 1 ? `Kick (${orderedSelection.length})` : "Kick")
@@ -739,7 +746,7 @@ function CombatantRow({
 	onDragTarget,
 }: CombatantRowProps) {
 	const isPlayerCombatant = combatant.monster.id.startsWith("player::");
-	const showInfoButton = !combatant.monster.id.startsWith("unresolved::");
+	const showInfoButton = !isPlayerCombatant && !combatant.monster.id.startsWith("unresolved::");
 	const initiativeDisplay = encounterRunning
 		? (combatant.initiative?.toString() ?? "-")
 		: combatant.dexMod === null
@@ -833,37 +840,50 @@ function CombatantRow({
 					isEditable={!isPlayerCombatant}
 					onCommit={(value) => actions.onSetAc(combatant.id, value)}
 				/>
-				<div className="encounter-cast-combatant-hp-fields">
-					<label>
-						<span>HP</span>
-						<input
-							type="number"
-							value={combatant.hpCurrent ?? ""}
-							placeholder="-"
-							disabled={isPlayerCombatant}
-							onInput={(event) => actions.onSetHp(combatant.id, event.currentTarget.value)}
-						/>
-					</label>
-					<label>
-						<span>max HP</span>
-						<input
-							type="number"
-							value={combatant.hpMax ?? ""}
-							placeholder="-"
-							disabled={isPlayerCombatant}
-							onInput={(event) => actions.onSetHpMax(combatant.id, event.currentTarget.value)}
-						/>
-					</label>
-					<label>
-						<span>temp HP</span>
-						<input
-							type="number"
-							value={combatant.tempHp}
-							placeholder="0"
-							disabled={isPlayerCombatant}
-							onInput={(event) => actions.onSetTempHp(combatant.id, event.currentTarget.value)}
-						/>
-					</label>
+				<div className="encounter-cast-combatant-stats-slot">
+					{isPlayerCombatant ? (
+						<div className="encounter-cast-combatant-player-hp" title="Player HP">
+							<span className="encounter-cast-combatant-player-heart" aria-hidden="true">
+								<svg viewBox="0 0 32 32">
+									<path d="M16 28C10.4 24.3 5.2 19.5 5.2 13.3C5.2 9.4 8.2 6.4 12.1 6.4C13.7 6.4 15.1 6.9 16 7.9C16.9 6.9 18.3 6.4 19.9 6.4C23.8 6.4 26.8 9.4 26.8 13.3C26.8 19.5 21.6 24.3 16 28Z" />
+								</svg>
+							</span>
+							<span className="encounter-cast-combatant-player-hp-main">
+								{combatant.hpCurrent ?? "-"} / {combatant.hpMax ?? "-"}
+							</span>
+							<span className="encounter-cast-combatant-player-temp">+{combatant.tempHp}</span>
+						</div>
+					) : (
+						<div className="encounter-cast-combatant-hp-fields">
+							<label>
+								<span>HP</span>
+								<input
+									type="number"
+									value={combatant.hpCurrent ?? ""}
+									placeholder="-"
+									onInput={(event) => actions.onSetHp(combatant.id, event.currentTarget.value)}
+								/>
+							</label>
+							<label>
+								<span>max HP</span>
+								<input
+									type="number"
+									value={combatant.hpMax ?? ""}
+									placeholder="-"
+									onInput={(event) => actions.onSetHpMax(combatant.id, event.currentTarget.value)}
+								/>
+							</label>
+							<label>
+								<span>temp HP</span>
+								<input
+									type="number"
+									value={combatant.tempHp}
+									placeholder="0"
+									onInput={(event) => actions.onSetTempHp(combatant.id, event.currentTarget.value)}
+								/>
+							</label>
+						</div>
+					)}
 				</div>
 				<div className="encounter-cast-combatant-row-end">
 					{showInfoButton ? (

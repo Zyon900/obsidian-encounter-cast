@@ -291,6 +291,7 @@
 	display: flex;
 	gap: 8px;
 	align-items: flex-end;
+	justify-content: flex-end;
 }
 
 .encounter-cast-combatant-hp-fields label {
@@ -308,6 +309,53 @@
 	font-size: 0.82rem;
 	line-height: 1.2;
 	height: 24px;
+}
+
+.encounter-cast-combatant-stats-slot {
+	min-width: 190px;
+	display: flex;
+	justify-content: flex-end;
+}
+
+.encounter-cast-combatant-player-hp {
+	display: inline-flex;
+	align-items: center;
+	justify-content: flex-start;
+	gap: 8px;
+	min-height: 40px;
+	width: 100%;
+}
+
+.encounter-cast-combatant-player-heart {
+	width: 40px;
+	height: 40px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	color: var(--color-red);
+}
+
+.encounter-cast-combatant-player-heart svg {
+	width: 40px;
+	height: 40px;
+	display: block;
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 1.5;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+}
+
+.encounter-cast-combatant-player-hp-main {
+	font-size: 0.9rem;
+	color: var(--text-normal);
+	white-space: nowrap;
+}
+
+.encounter-cast-combatant-player-temp {
+	font-size: 0.9rem;
+	color: var(--text-muted);
+	white-space: nowrap;
 }
 
 .encounter-cast-combatant-row-end {
@@ -560,6 +608,12 @@
 		justify-content: flex-start;
 	}
 
+	.encounter-cast-combatant-stats-slot {
+		min-width: 0;
+		width: 100%;
+		justify-content: flex-start;
+	}
+
 	.encounter-cast-dashboard-invite-row {
 		grid-template-columns: 1fr;
 	}
@@ -585,9 +639,6 @@
 .encounter-cast-dashboard-icon-button.has-divider .encounter-cast-dashboard-icon {
 	transform: translateX(0.5px);
 }
-
-
-
 
 
 
