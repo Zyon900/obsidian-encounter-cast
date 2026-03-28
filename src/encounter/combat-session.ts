@@ -31,6 +31,7 @@ export interface CombatSession {
 interface AddCombatantsOptions {
 	rollInitiative?: boolean;
 	insertByInitiative?: boolean;
+	resolveHpForMonster?: (monster: MonsterRecord) => number | null;
 }
 
 export function createCombatSession(
@@ -40,7 +41,10 @@ export function createCombatSession(
 ): CombatSession {
 	const createdAt = new Date().toISOString();
 	const rollInitiative = options.rollInitiative ?? false;
-	const combatants = expandCombatants(entries, [], { rollInitiative });
+	const combatants = expandCombatants(entries, [], {
+		rollInitiative,
+		resolveHpForMonster: options.resolveHpForMonster,
+	});
 	const ordered = rollInitiative ? sortCombatantsByInitiative(combatants) : combatants;
 	return {
 		id: `session-${Date.now().toString(36)}`,
@@ -61,7 +65,10 @@ export function addCombatantsToSession(
 ): CombatSession {
 	const rollInitiative = options.rollInitiative ?? false;
 	const insertByInitiative = options.insertByInitiative ?? false;
-	const additions = expandCombatants(entries, session.combatants, { rollInitiative });
+	const additions = expandCombatants(entries, session.combatants, {
+		rollInitiative,
+		resolveHpForMonster: options.resolveHpForMonster,
+	});
 	if (additions.length === 0) {
 		return session;
 	}
@@ -308,6 +315,7 @@ export function upsertPlayerCombatant(session: CombatSession, playerId: string, 
 		xp: null,
 		hp: null,
 		max_hp: null,
+		hp_formula: null,
 		ac: null,
 		dex_mod: 0,
 		damage_vulnerabilities: [],
@@ -367,6 +375,7 @@ function expandCombatants(
 	const counters = buildNameCounters(existingCombatants);
 	const combatants: Combatant[] = [];
 	const rollInitiative = options.rollInitiative ?? false;
+	const resolveHpForMonster = options.resolveHpForMonster;
 
 	for (const item of entries) {
 		for (let copyIndex = 0; copyIndex < item.entry.quantity; copyIndex++) {
@@ -375,14 +384,16 @@ function expandCombatants(
 			const displayName = nextCombatantLabel(baseName, counters);
 			const idSeed = `${item.monster.id}-${item.entry.line}-${existingCombatants.length + combatants.length + 1}`;
 			const initiativeRoll = rollInitiative ? rollInitiativeForMonster(item.monster.dex_mod) : null;
+			const rolledHp = resolveHpForMonster ? resolveHpForMonster(item.monster) : null;
+			const hpMax = rolledHp ?? item.monster.max_hp ?? item.monster.hp;
 			combatants.push({
 				id: `combatant-${idSeed}`,
 				name: displayName,
 				monsterName,
 				isPlayer: false,
 				challenge: item.monster.challenge,
-				hpCurrent: item.monster.hp ?? item.monster.max_hp,
-				hpMax: item.monster.max_hp ?? item.monster.hp,
+				hpCurrent: hpMax,
+				hpMax,
 				tempHp: 0,
 				ac: item.monster.ac,
 				dexMod: item.monster.dex_mod,

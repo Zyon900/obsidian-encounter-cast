@@ -45,6 +45,15 @@ export class EncounterCastSettingTab extends PluginSettingTab {
 			},
 		});
 
+		new Setting(containerEl)
+			.setName("Roll monster hp on add")
+			.setDesc("Roll monster max hp from fantasy statblocks using dice roller instead of average hp.")
+			.addToggle((toggle) =>
+				toggle.setValue(settings.rollMonsterHp).onChange((value) => {
+					void this.plugin.updateRollMonsterHpSetting(value);
+				}),
+			);
+
 		new Setting(containerEl).setName("Monster hover preview").setHeading();
 		new Setting(containerEl)
 			.setName("Enable monster hover preview")

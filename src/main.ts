@@ -1,4 +1,5 @@
 import { Notice, Plugin, TFile, type MarkdownPostProcessorContext, type MarkdownSectionInformation } from "obsidian";
+import { DiceRollerAdapter } from "./dice/dice-roller-adapter";
 import {
 	addCombatantsToSession,
 	advanceCombatTurn,
@@ -37,6 +38,7 @@ import { PreactMount } from "./ui/preact-mount";
 import { CleanupRegistry } from "./utils/cleanup-registry";
 
 export interface EncounterCastSettings extends EncounterPartySettings {
+	rollMonsterHp: boolean;
 	hoverPreviewEnabled: boolean;
 	hoverPreviewDelayMs: number;
 	hoverPreviewHideDelayMs: number;
@@ -47,6 +49,7 @@ export interface EncounterCastSettings extends EncounterPartySettings {
 const DEFAULT_SETTINGS: EncounterCastSettings = {
 	partyMembers: null,
 	partyLevel: null,
+	rollMonsterHp: false,
 	hoverPreviewEnabled: true,
 	hoverPreviewDelayMs: 500,
 	hoverPreviewHideDelayMs: 500,
@@ -57,6 +60,7 @@ const DEFAULT_SETTINGS: EncounterCastSettings = {
 export default class EncounterCastPlugin extends Plugin {
 	private readonly cleanupRegistry = new CleanupRegistry();
 	private readonly encounterServer = new CombatServer();
+	private readonly diceRollerAdapter = new DiceRollerAdapter(this.app);
 	private readonly monsterManager = new MonsterManager(this.app);
 	private preactMount: PreactMount | null = null;
 	private statusBarRoot: HTMLElement | null = null;
@@ -352,6 +356,10 @@ export default class EncounterCastPlugin extends Plugin {
 		}
 
 		const totalCreatures = prepared.resolvedResult.resolved.reduce((sum, item) => sum + item.entry.quantity, 0);
+		const hpRollTracker = this.settings.rollMonsterHp
+			? await this.createMonsterHpRollTracker(prepared.resolvedResult.resolved)
+			: null;
+		const resolveHpForMonster = hpRollTracker ? hpRollTracker.resolve : undefined;
 		if (mode === "run") {
 			const players = this.preparePlayerCombatantsForCombatStart(this.getPlayerCombatants());
 			const baseSession: CombatSession = this.currentSession
@@ -364,10 +372,16 @@ export default class EncounterCastPlugin extends Plugin {
 						updatedAt: new Date().toISOString(),
 					}
 				: createCombatSession(prepared.parseResult.title, []);
-			const nextSession = addCombatantsToSession(baseSession, prepared.parseResult.title, prepared.resolvedResult.resolved, {
-				rollInitiative: true,
-				insertByInitiative: true,
-			});
+			const nextSession = addCombatantsToSession(
+				baseSession,
+				prepared.parseResult.title,
+				prepared.resolvedResult.resolved,
+				{
+					rollInitiative: true,
+					insertByInitiative: true,
+					resolveHpForMonster,
+				},
+			);
 			this.encounterRunning = true;
 			this.updateSession(setActiveToTopCombatant(nextSession));
 			this.renderDashboardView();
@@ -380,12 +394,14 @@ export default class EncounterCastPlugin extends Plugin {
 			? addCombatantsToSession(this.currentSession, prepared.parseResult.title, prepared.resolvedResult.resolved, {
 					rollInitiative: this.encounterRunning,
 					insertByInitiative: this.encounterRunning,
+					resolveHpForMonster,
 				})
-			: createCombatSession(prepared.parseResult.title, prepared.resolvedResult.resolved);
+			: createCombatSession(prepared.parseResult.title, prepared.resolvedResult.resolved, {
+					resolveHpForMonster,
+				});
 		this.updateSession(nextSession);
 		this.renderDashboardView();
 		await this.openDashboardView();
-		new Notice(`Encounter updated. ${totalCreatures} monsters added.`);
 	}
 
 	private async persistEncounterRows(
@@ -516,12 +532,6 @@ export default class EncounterCastPlugin extends Plugin {
 				entry,
 				monster: this.createUnresolvedMonsterRecord(entry.monsterQuery),
 			}));
-			for (const unresolved of resolvedResult.unresolved.slice(0, 4)) {
-				new Notice(`Line ${unresolved.line}: Added unresolved "${unresolved.monsterQuery}" with empty stats.`);
-			}
-			if (resolvedResult.unresolved.length > 4) {
-				new Notice(`${resolvedResult.unresolved.length - 4} more unresolved encounter rows added with empty stats.`);
-			}
 			return {
 				parseResult,
 				resolvedResult: {
@@ -548,6 +558,7 @@ export default class EncounterCastPlugin extends Plugin {
 			xp: null,
 			hp: null,
 			max_hp: null,
+			hp_formula: null,
 			ac: null,
 			dex_mod: null,
 			damage_vulnerabilities: [],
@@ -637,11 +648,11 @@ export default class EncounterCastPlugin extends Plugin {
 				return;
 			}
 
-			this.addMonsterToSession(selection.monster ?? this.createUnresolvedMonsterRecord(selection.monsterName));
+			void this.addMonsterToSession(selection.monster ?? this.createUnresolvedMonsterRecord(selection.monsterName));
 		});
 	}
 
-	private addMonsterToSession(monster: MonsterRecord): void {
+	private async addMonsterToSession(monster: MonsterRecord): Promise<void> {
 		const session = this.currentSession ?? createCombatSession("Current encounter", []);
 		const resolved: ResolvedEncounterEntry = {
 			entry: {
@@ -653,12 +664,13 @@ export default class EncounterCastPlugin extends Plugin {
 			monster,
 		};
 
+		const hpRollTracker = this.settings.rollMonsterHp ? await this.createMonsterHpRollTracker([resolved]) : null;
 		const nextSession = addCombatantsToSession(session, session.title, [resolved], {
 			rollInitiative: this.encounterRunning,
 			insertByInitiative: this.encounterRunning,
+			resolveHpForMonster: hpRollTracker ? hpRollTracker.resolve : undefined,
 		});
 		this.updateSession(nextSession);
-		new Notice(`${monster.name} added to encounter.`);
 	}
 
 	private clearMonstersFromSession(): void {
@@ -1099,6 +1111,14 @@ export default class EncounterCastPlugin extends Plugin {
 		this.refreshEncounterDifficultyViews();
 	}
 
+	async updateRollMonsterHpSetting(rollMonsterHp: boolean): Promise<void> {
+		this.settings = {
+			...this.settings,
+			rollMonsterHp,
+		};
+		await this.saveData(this.settings);
+	}
+
 	async updateHoverPreviewSettings(settings: {
 		hoverPreviewEnabled: boolean;
 		hoverPreviewDelayMs: number;
@@ -1189,6 +1209,45 @@ export default class EncounterCastPlugin extends Plugin {
 		this.monsterManager.scheduleHideCreatureHoverPreview(this.settings.hoverPreviewHideDelayMs);
 	}
 
+	private async createMonsterHpRollTracker(entries: ResolvedEncounterEntry[]): Promise<{
+		resolve: (monster: MonsterRecord) => number | null;
+	}> {
+		const hpQueueByMonsterId = new Map<string, number[]>();
+		const canRollWithDice = this.diceRollerAdapter.isAvailable();
+
+		for (const entry of entries) {
+			for (let copyIndex = 0; copyIndex < entry.entry.quantity; copyIndex++) {
+				const formula = entry.monster.hp_formula?.trim();
+				if (!formula) {
+					continue;
+				}
+				if (!canRollWithDice) {
+					continue;
+				}
+
+				const rolled = await this.diceRollerAdapter.rollFormula(formula, "encounter-cast");
+				if (rolled === null) {
+					continue;
+				}
+
+				const queue = hpQueueByMonsterId.get(entry.monster.id) ?? [];
+				queue.push(rolled);
+				hpQueueByMonsterId.set(entry.monster.id, queue);
+			}
+		}
+
+		return {
+			resolve: (monster: MonsterRecord) => {
+				const queue = hpQueueByMonsterId.get(monster.id);
+				if (!queue || queue.length === 0) {
+					return null;
+				}
+				return queue.shift() ?? null;
+			},
+		};
+	}
+
+
 	private captureTheme(): PlayerTheme | null {
 		if (typeof document === "undefined") {
 			return null;
@@ -1252,6 +1311,7 @@ function mergeSettings(value: unknown): EncounterCastSettings {
 	return {
 		partyMembers: Number.isInteger(candidate.partyMembers) ? candidate.partyMembers ?? null : null,
 		partyLevel: Number.isInteger(candidate.partyLevel) ? candidate.partyLevel ?? null : null,
+		rollMonsterHp: typeof candidate.rollMonsterHp === "boolean" ? candidate.rollMonsterHp : DEFAULT_SETTINGS.rollMonsterHp,
 		hoverPreviewEnabled:
 			typeof candidate.hoverPreviewEnabled === "boolean"
 				? candidate.hoverPreviewEnabled

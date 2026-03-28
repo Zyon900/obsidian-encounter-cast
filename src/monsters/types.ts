@@ -5,6 +5,7 @@ export interface MonsterRecord {
 	xp: number | null;
 	hp: number | null;
 	max_hp: number | null;
+	hp_formula: string | null;
 	ac: number | null;
 	dex_mod: number | null;
 	damage_vulnerabilities: string[];

@@ -203,6 +203,7 @@ export class MonsterManager {
 			xp: this.readXp(record),
 			hp: this.readHpValue(record.hp),
 			max_hp: this.readNumber(record.max_hp) ?? this.readNumber(record.hpMax) ?? this.readHpValue(record.hp),
+			hp_formula: this.readHpFormula(record),
 			ac: this.readNumber(record.ac),
 			dex_mod: this.readDexMod(record),
 			damage_vulnerabilities: this.readStringList(record.damage_vulnerabilities),
@@ -250,6 +251,56 @@ export class MonsterManager {
 		}
 
 		return null;
+	}
+
+	private readHpFormula(record: Record<string, unknown>): string | null {
+		const direct =
+			this.readDiceFormula(record.hp_formula) ??
+			this.readDiceFormula(record.hpFormula) ??
+			this.readDiceFormula(record.hit_points_roll) ??
+			this.readDiceFormula(record.hitPointsRoll) ??
+			this.readDiceFormula(record.hp_roll) ??
+			this.readDiceFormula(record.hpRoll) ??
+			this.readDiceFormula(record.hit_dice) ??
+			this.readDiceFormula(record.hitDice) ??
+			this.readDiceFormula(record.hit_points) ??
+			this.readDiceFormula(record.hitPoints);
+		if (direct) {
+			return direct;
+		}
+
+		return this.readDiceFormula(record.hp);
+	}
+
+	private readDiceFormula(value: unknown): string | null {
+		if (typeof value === "string") {
+			return this.extractDiceExpression(value);
+		}
+		if (!value || typeof value !== "object") {
+			return null;
+		}
+
+		const record = value as Record<string, unknown>;
+		for (const key of ["formula", "dice", "hit_dice", "hitDice", "expression", "value"]) {
+			const candidate = this.readDiceFormula(record[key]);
+			if (candidate) {
+				return candidate;
+			}
+		}
+
+		return null;
+	}
+
+	private extractDiceExpression(text: string): string | null {
+		const normalized = text.replace(/\s+/g, " ").trim();
+		if (!normalized.length) {
+			return null;
+		}
+		const match = /\b\d+d\d+(?:\s*[+-]\s*\d+)?\b/i.exec(normalized);
+		if (!match?.[0]) {
+			return null;
+		}
+		return match[0].replace(/\s+/g, "");
 	}
 
 	private readString(value: unknown): string | null {
@@ -402,5 +453,3 @@ export class MonsterManager {
 			.replace(/(^-|-$)/g, "");
 	}
 }
-
-
