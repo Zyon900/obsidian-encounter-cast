@@ -4,6 +4,9 @@ import { networkInterfaces } from "node:os";
 import {
 	advanceCombatTurn,
 	createCombatSession,
+	markCombatantDead,
+	markCombatantStabilized,
+	setCombatantDeathSaves,
 	setActiveToTopCombatant,
 	setCombatantAc,
 	setCombatantHp,
@@ -18,6 +21,7 @@ import type {
 	EndTurnPayload,
 	InitiativeSubmitPayload,
 	PlayerId,
+	PlayerDeathSavesPayload,
 	PlayerJoinRequest,
 	PlayerJoinResponse,
 	PlayerPresenceState,
@@ -274,6 +278,16 @@ export class CombatServer {
 				return;
 			}
 
+			if (pathname === "/api/player/death-saves" && method === "POST") {
+				const payload = await this.readJsonBody<PlayerDeathSavesPayload>(req);
+				const changed = this.handlePlayerDeathSaves(payload);
+				this.sendJson(res, 200, {
+					ok: changed,
+					state: this.buildStateSync(payload.playerId),
+				});
+				return;
+			}
+
 			if (pathname === "/api/player/end-turn" && method === "POST") {
 				const payload = await this.readJsonBody<EndTurnPayload>(req);
 				const changed = this.handleEndTurn(payload);
@@ -406,6 +420,37 @@ export class CombatServer {
 		}
 		if (payload.ac !== undefined) {
 			next = setCombatantAc(next, player.combatantId, payload.ac);
+		}
+
+		if (next === this.activeSession) {
+			return false;
+		}
+		this.activeSession = next;
+		this.emitStateSyncToAllPlayers();
+		this.onSessionChange?.(this.activeSession);
+		return true;
+	}
+
+	private handlePlayerDeathSaves(payload: PlayerDeathSavesPayload): boolean {
+		const player = this.players.get(payload.playerId);
+		if (!player || !this.activeSession) {
+			return false;
+		}
+
+		const combatant = this.activeSession.combatants.find((candidate) => candidate.id === player.combatantId) ?? null;
+		if (!combatant || combatant.isPlayer !== true || combatant.deathState !== "down") {
+			return false;
+		}
+
+		let next = this.activeSession;
+		if (payload.confirm === "dead") {
+			next = markCombatantDead(next, player.combatantId);
+		} else if (payload.confirm === "saved") {
+			next = markCombatantStabilized(next, player.combatantId);
+		} else {
+			const successes = Number.isFinite(payload.successes) ? Math.trunc(payload.successes ?? 0) : 0;
+			const failures = Number.isFinite(payload.failures) ? Math.trunc(payload.failures ?? 0) : 0;
+			next = setCombatantDeathSaves(next, player.combatantId, successes, failures);
 		}
 
 		if (next === this.activeSession) {

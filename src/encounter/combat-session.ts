@@ -15,6 +15,9 @@ export interface Combatant {
 	initiative: number | null;
 	initiativeRoll: number | null;
 	initiativeCriticalFailure: boolean;
+	deathState: "normal" | "down" | "dead";
+	deathSaveFailures: number;
+	deathSaveSuccesses: number;
 	monster: MonsterRecord;
 }
 
@@ -177,7 +180,7 @@ export function moveCombatant(session: CombatSession, combatantId: string, targe
 export function setCombatantHp(session: CombatSession, combatantId: string, hpCurrent: number | null): CombatSession {
 	return updateCombatant(session, combatantId, (combatant) => ({
 		...combatant,
-		hpCurrent: hpCurrent === null ? null : Math.max(0, hpCurrent),
+		...normalizePlayerDeathState(combatant, hpCurrent === null ? null : Math.max(0, hpCurrent), combatant.hpMax),
 	}));
 }
 
@@ -186,10 +189,14 @@ export function setCombatantHpMax(session: CombatSession, combatantId: string, h
 		const nextHpMax = hpMax === null ? null : Math.max(0, hpMax);
 		const nextHpCurrent =
 			combatant.hpCurrent === null || nextHpMax === null ? combatant.hpCurrent : Math.min(combatant.hpCurrent, nextHpMax);
+		const withDeathState = normalizePlayerDeathState(combatant, nextHpCurrent, nextHpMax);
 		return {
 			...combatant,
 			hpMax: nextHpMax,
-			hpCurrent: nextHpCurrent,
+			hpCurrent: withDeathState.hpCurrent,
+			deathState: withDeathState.deathState,
+			deathSaveFailures: withDeathState.deathSaveFailures,
+			deathSaveSuccesses: withDeathState.deathSaveSuccesses,
 		};
 	});
 }
@@ -213,6 +220,54 @@ export function setCombatantDexMod(session: CombatSession, combatantId: string, 
 		...combatant,
 		dexMod,
 	}));
+}
+
+export function setCombatantDeathSaves(
+	session: CombatSession,
+	combatantId: string,
+	successes: number,
+	failures: number,
+): CombatSession {
+	return updateCombatant(session, combatantId, (combatant) => {
+		if (combatant.isPlayer !== true || combatant.deathState !== "down") {
+			return combatant;
+		}
+		return {
+			...combatant,
+			deathSaveSuccesses: clampDeathSaveCount(successes),
+			deathSaveFailures: clampDeathSaveCount(failures),
+		};
+	});
+}
+
+export function markCombatantDead(session: CombatSession, combatantId: string): CombatSession {
+	return updateCombatant(session, combatantId, (combatant) => {
+		if (combatant.isPlayer !== true) {
+			return combatant;
+		}
+		return {
+			...combatant,
+			hpCurrent: 0,
+			deathState: "dead",
+			deathSaveFailures: 3,
+			deathSaveSuccesses: 0,
+		};
+	});
+}
+
+export function markCombatantStabilized(session: CombatSession, combatantId: string): CombatSession {
+	return updateCombatant(session, combatantId, (combatant) => {
+		if (combatant.isPlayer !== true) {
+			return combatant;
+		}
+		return {
+			...combatant,
+			hpCurrent: 1,
+			deathState: "normal",
+			deathSaveFailures: 0,
+			deathSaveSuccesses: 0,
+		};
+	});
 }
 
 export function setActiveCombatant(session: CombatSession, combatantId: string): CombatSession {
@@ -340,6 +395,9 @@ export function upsertPlayerCombatant(session: CombatSession, playerId: string, 
 		initiative: null,
 		initiativeRoll: null,
 		initiativeCriticalFailure: false,
+		deathState: "normal",
+		deathSaveFailures: 0,
+		deathSaveSuccesses: 0,
 		monster: playerMonster,
 	};
 
@@ -400,6 +458,9 @@ function expandCombatants(
 				initiative: initiativeRoll?.total ?? null,
 				initiativeRoll: initiativeRoll?.roll ?? null,
 				initiativeCriticalFailure: initiativeRoll?.isCriticalFailure ?? false,
+				deathState: "normal",
+				deathSaveFailures: 0,
+				deathSaveSuccesses: 0,
 				monster: item.monster,
 			});
 		}
@@ -481,6 +542,68 @@ function rollInitiativeForMonster(dexMod: number | null): { roll: number; total:
 		total,
 		isCriticalFailure: d20 === 1,
 	};
+}
+
+function normalizePlayerDeathState(
+	combatant: Combatant,
+	nextHpCurrent: number | null,
+	nextHpMax: number | null,
+): Pick<Combatant, "hpCurrent" | "deathState" | "deathSaveFailures" | "deathSaveSuccesses"> {
+	const hpCurrent = nextHpCurrent === null ? null : Math.max(0, nextHpCurrent);
+	if (combatant.isPlayer !== true) {
+		return {
+			hpCurrent,
+			deathState: combatant.deathState ?? "normal",
+			deathSaveFailures: combatant.deathSaveFailures ?? 0,
+			deathSaveSuccesses: combatant.deathSaveSuccesses ?? 0,
+		};
+	}
+
+	const currentState = combatant.deathState ?? "normal";
+	const currentFailures = clampDeathSaveCount(combatant.deathSaveFailures ?? 0);
+	const currentSuccesses = clampDeathSaveCount(combatant.deathSaveSuccesses ?? 0);
+
+	if (hpCurrent === null || hpCurrent > 0) {
+		return {
+			hpCurrent,
+			deathState: "normal",
+			deathSaveFailures: 0,
+			deathSaveSuccesses: 0,
+		};
+	}
+
+	if (currentState === "dead") {
+		return {
+			hpCurrent: 0,
+			deathState: "dead",
+			deathSaveFailures: Math.max(3, currentFailures),
+			deathSaveSuccesses: 0,
+		};
+	}
+
+	const wasDownedAlready = (combatant.hpCurrent ?? 0) <= 0 && currentState === "down";
+	if (wasDownedAlready) {
+		return {
+			hpCurrent: 0,
+			deathState: "down",
+			deathSaveFailures: currentFailures,
+			deathSaveSuccesses: currentSuccesses,
+		};
+	}
+
+	return {
+		hpCurrent: 0,
+		deathState: "down",
+		deathSaveFailures: 0,
+		deathSaveSuccesses: 0,
+	};
+}
+
+function clampDeathSaveCount(value: number): number {
+	if (!Number.isFinite(value)) {
+		return 0;
+	}
+	return Math.max(0, Math.min(3, Math.trunc(value)));
 }
 
 function sortCombatantsByInitiative(combatants: Combatant[]): Combatant[] {

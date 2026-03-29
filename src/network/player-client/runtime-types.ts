@@ -1,7 +1,7 @@
 import type { InitiativeSubmitPayload, PlayerFacingState, StateSyncPayload } from "../player-events";
 
 export type RollType = NonNullable<InitiativeSubmitPayload["rollType"]>;
-export type SheetMode = "none" | "edit" | "damage";
+export type SheetMode = "none" | "edit" | "damage" | "death";
 export type PlayerCombatant = PlayerFacingState["combatants"][number];
 
 export interface ApiResult {

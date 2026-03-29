@@ -314,6 +314,9 @@ button:disabled {
   gap: 8px;
   margin-top: 10px;
 }
+.sheet-actions.is-hidden {
+  display: none;
+}
 .sheet-actions button {
   width: 100%;
   min-height: 48px;
@@ -337,35 +340,22 @@ button:disabled {
   padding: 0 4px;
 }
 .sheet-panel {
-  max-height: 0;
-  opacity: 0;
-  transform: translateY(8px);
-  overflow: hidden;
-  pointer-events: none;
-  margin-top: 0;
-  transition:
-    max-height 220ms cubic-bezier(0.2, 0, 0, 1),
-    opacity 170ms ease,
-    transform 220ms cubic-bezier(0.2, 0, 0, 1),
-    margin-top 220ms cubic-bezier(0.2, 0, 0, 1);
+  display: none;
+  margin-top: 8px;
 }
 .sheet-panel.open {
-  max-height: 420px;
-  opacity: 1;
-  transform: translateY(0);
-  pointer-events: auto;
-  margin-top: 8px;
+  display: block;
+  animation: sheetPanelIn 220ms cubic-bezier(0.2, 0, 0, 1);
 }
 .sheet-panel .sheet-grid,
 .sheet-panel label {
-  opacity: 0;
-  transform: translateY(4px);
-  transition: opacity 160ms ease, transform 220ms cubic-bezier(0.2, 0, 0, 1);
+  opacity: 1;
+  transform: none;
 }
 .sheet-panel.open .sheet-grid,
 .sheet-panel.open label {
   opacity: 1;
-  transform: translateY(0);
+  transform: none;
 }
 .sheet-summary {
   color: var(--ec-text-normal);
@@ -486,17 +476,15 @@ button:disabled {
   stroke: var(--ec-interactive-accent);
 }
 .sheet-turn-cta {
-  max-height: 0;
-  opacity: 0;
-  transform: translateY(18px);
-  overflow: hidden;
-  transition: max-height 180ms ease, opacity 180ms ease, transform 180ms ease;
+  display: none;
+}
+.sheet-turn-cta.is-hidden {
+  display: none;
 }
 .sheet-turn-cta.is-visible {
-  max-height: 52px;
-  opacity: 1;
-  transform: translateY(0);
+  display: block;
   margin-top: 8px;
+  animation: sheetCtaIn 180ms ease;
 }
 .sheet-turn-cta button {
   width: 100%;
@@ -585,6 +573,139 @@ button:disabled {
   margin: 0;
   pointer-events: none;
   z-index: 1000;
+}
+.death-save-indicator {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 1px;
+  margin-left: 2px;
+  align-self: center;
+  flex: 0 0 auto;
+}
+.death-save-indicator.list {
+  margin-top: 0;
+}
+.death-save-indicator.list .death-save-icon {
+  width: 15px;
+  height: 15px;
+}
+.death-save-indicator.list .death-save-icon svg {
+  width: 15px;
+  height: 15px;
+}
+.death-save-indicator.list .death-save-diamond {
+  width: 15px;
+  height: 15px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  line-height: 1;
+}
+.death-save-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.death-save-icon {
+  width: 13px;
+  height: 13px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+.death-save-icon svg {
+  width: 13px;
+  height: 13px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.death-save-row .death-save-icon {
+  color: var(--ec-text-muted);
+}
+.death-save-diamond {
+  font-size: 8px;
+  line-height: 1;
+  color: var(--ec-text-faint);
+  opacity: 0.8;
+}
+.death-save-diamond.is-filled {
+  color: var(--ec-text-normal);
+  opacity: 1;
+}
+.death-save-panel {
+  overflow: visible;
+}
+.death-save-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.death-save-editor-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.death-save-editor-icon {
+  width: 20px;
+  height: 20px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ec-text-muted);
+}
+.death-save-editor-icon svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.death-save-editor-diamonds {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  flex: 1 1 auto;
+}
+.death-save-diamond-btn {
+  min-height: 42px;
+  border: 1px solid var(--ec-border);
+  background: transparent;
+  color: var(--ec-text-muted);
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1;
+}
+.death-save-diamond-btn.is-filled {
+  border-color: transparent;
+  background: color-mix(in srgb, var(--ec-interactive-accent) 20%, transparent);
+  color: var(--ec-text-normal);
+}
+.death-confirm-btn {
+  margin-top: 0;
+}
+.death-confirm-btn-static {
+  margin-top: 2px;
+}
+.death-confirm-cta {
+  display: none;
+}
+.death-confirm-cta.is-visible {
+  display: block;
+  margin-top: 8px;
+  animation: sheetCtaIn 180ms ease;
+}
+.death-confirm-btn-accent {
+  background: var(--ec-interactive-accent);
+  border-color: transparent;
+  color: var(--ec-text-on-accent);
 }
 .initiative-roll-toggle {
   display: grid;
@@ -692,8 +813,32 @@ button:disabled {
     min-height: 48px;
     font-size: 14px;
   }
+  .death-save-diamond-btn {
+    min-height: 48px;
+    font-size: 20px;
+  }
 }
 @keyframes pulse {
   0%, 100% { box-shadow: inset 0 0 0 1px var(--ec-interactive-accent); }
   50% { box-shadow: inset 0 0 0 2px var(--ec-interactive-accent); }
+}
+@keyframes sheetPanelIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes sheetCtaIn {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }

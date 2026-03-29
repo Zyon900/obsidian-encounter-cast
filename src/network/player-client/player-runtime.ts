@@ -23,6 +23,7 @@ import {
 } from "./runtime-labels";
 import {
 	createInitiativeBadge,
+	createDeathSaveIndicator,
 	createSheetHeart,
 	createSheetShield,
 	createShield,
@@ -45,6 +46,7 @@ export const PLAYER_CLIENT_RUNTIME_HELPERS = [
 	clearChildren,
 	createIconSvg,
 	createInitiativeBadge,
+	createDeathSaveIndicator,
 	createShield,
 	createSheetShield,
 	createSheetHeart,
@@ -179,6 +181,9 @@ export function bootPlayerClient(config: PlayerClientBootConfig): void {
 		nameBlock.appendChild(createEl("div", { className: "name", text: c.name }));
 		nameBlock.appendChild(createEl("div", { className: hpClass(c.hpLabel), text: sentenceCaseLabel(c.hpLabel) }));
 		row.appendChild(nameBlock);
+		if (c.isPlayer && c.deathState === "down") {
+			row.appendChild(createDeathSaveIndicator(c.deathSaveSuccesses ?? 0, c.deathSaveFailures ?? 0, "list"));
+		}
 		const tail = createEl("div", { className: "tail" });
 		const showAc = c.isSelf || c.isPlayer;
 		tail.appendChild(createShield(c.ac ?? "-", !showAc));
@@ -218,15 +223,25 @@ export function bootPlayerClient(config: PlayerClientBootConfig): void {
 	const titleEl = requireEl<HTMLElement>("title");
 	const sheetRoot = requireEl<HTMLDivElement>("sheetRoot");
 	const sheetSummary = requireEl<HTMLDivElement>("sheetSummary");
+	const sheetActions = requireEl<HTMLDivElement>("sheetActions");
 	const editModeBtn = requireEl<HTMLButtonElement>("editModeBtn");
 	const damageModeBtn = requireEl<HTMLButtonElement>("damageModeBtn");
 	const editPanel = requireEl<HTMLDivElement>("editPanel");
 	const damagePanel = requireEl<HTMLDivElement>("damagePanel");
+	const deathSavePanel = requireEl<HTMLDivElement>("deathSavePanel");
 	const sheetAc = requireEl<HTMLInputElement>("sheetAc");
 	const sheetHp = requireEl<HTMLInputElement>("sheetHp");
 	const sheetHpMax = requireEl<HTMLInputElement>("sheetHpMax");
 	const sheetTempHp = requireEl<HTMLInputElement>("sheetTempHp");
 	const sheetDamage = requireEl<HTMLInputElement>("sheetDamage");
+	const sheetDeathCta = requireEl<HTMLDivElement>("sheetDeathCta");
+	const deathSaveModeBtn = requireEl<HTMLButtonElement>("deathSaveModeBtn");
+	const deathSaveCloseBtn = requireEl<HTMLButtonElement>("deathSaveCloseBtn");
+	const confirmDeathCta = requireEl<HTMLDivElement>("confirmDeathCta");
+	const confirmSavedCta = requireEl<HTMLDivElement>("confirmSavedCta");
+	const confirmDeathBtn = requireEl<HTMLButtonElement>("confirmDeathBtn");
+	const confirmSavedBtn = requireEl<HTMLButtonElement>("confirmSavedBtn");
+	const deathSaveDiamondButtons = Array.from(document.querySelectorAll<HTMLButtonElement>(".death-save-diamond-btn"));
 	const sheetTurnCta = requireEl<HTMLDivElement>("sheetTurnCta");
 	const endRoundBtn = requireEl<HTMLButtonElement>("endRoundBtn");
 
@@ -241,6 +256,8 @@ export function bootPlayerClient(config: PlayerClientBootConfig): void {
 	let lastActiveCombatantId: string | null = null;
 	let previousCombatantOrderKey = "";
 	let hasRenderedCombatants = false;
+	let deathDraftFailures = 0;
+	let deathDraftSuccesses = 0;
 
 	async function api(path: string, method: "GET" | "POST" = "GET", body?: unknown): Promise<unknown> {
 		const url = `${path}${path.includes("?") ? "&" : "?"}token=${encodeURIComponent(token)}`;
@@ -333,11 +350,16 @@ export function bootPlayerClient(config: PlayerClientBootConfig): void {
 		sheetMode = mode;
 		const isEdit = mode === "edit";
 		const isDamage = mode === "damage";
+		const isDeath = mode === "death";
 		editPanel.classList.toggle("open", isEdit);
 		damagePanel.classList.toggle("open", isDamage);
+		deathSavePanel.classList.toggle("open", isDeath);
 		editModeBtn.classList.toggle("is-active", isEdit);
 		damageModeBtn.classList.toggle("is-active", isDamage);
-		editModeBtn.classList.toggle("is-hidden", isDamage);
+		editModeBtn.classList.toggle("is-hidden", isDamage || isDeath);
+		damageModeBtn.classList.toggle("is-hidden", isDeath);
+		sheetActions.classList.toggle("is-hidden", isDeath);
+		sheetDeathCta.classList.toggle("is-hidden", isEdit || isDamage || isDeath);
 		sheetSummary.classList.toggle("is-hidden", isEdit);
 		editModeBtn.textContent = isEdit ? "Save stats" : "Edit stats";
 		setDamageButtonLabel(isDamage);
@@ -352,6 +374,20 @@ export function bootPlayerClient(config: PlayerClientBootConfig): void {
 		}
 	}
 
+	function renderDeathSaveEditor(): void {
+		for (const button of deathSaveDiamondButtons) {
+			const track = button.dataset.track;
+			const value = parseIntOrNull(button.dataset.value ?? "") ?? 0;
+			const filled = track === "failures" ? value <= deathDraftFailures : value <= deathDraftSuccesses;
+			button.classList.toggle("is-filled", filled);
+			button.textContent = filled ? "◆" : "◇";
+		}
+		const showConfirmDeath = deathDraftFailures >= 3;
+		const showConfirmSaved = deathDraftSuccesses >= 3;
+		confirmDeathCta.classList.toggle("is-visible", showConfirmDeath);
+		confirmSavedCta.classList.toggle("is-visible", showConfirmSaved);
+	}
+
 	function handleAsyncError(error: unknown): void {
 		console.error("[encounter-cast] player client handler failed", error);
 	}
@@ -363,6 +399,9 @@ export function bootPlayerClient(config: PlayerClientBootConfig): void {
 			sheetHp.value = "";
 			sheetHpMax.value = "";
 			sheetTempHp.value = "";
+			deathDraftFailures = 0;
+			deathDraftSuccesses = 0;
+			renderDeathSaveEditor();
 			if (sheetMode !== "damage") {
 				sheetDamage.value = "";
 			}
@@ -375,6 +414,10 @@ export function bootPlayerClient(config: PlayerClientBootConfig): void {
 		if (sheetMode !== "damage") {
 			sheetDamage.value = "";
 		}
+
+		deathDraftFailures = Math.max(0, Math.min(3, Math.trunc(self.deathSaveFailures ?? 0)));
+		deathDraftSuccesses = Math.max(0, Math.min(3, Math.trunc(self.deathSaveSuccesses ?? 0)));
+		renderDeathSaveEditor();
 	}
 
 	function cancelSheetEdit(): void {
@@ -499,10 +542,16 @@ export function bootPlayerClient(config: PlayerClientBootConfig): void {
 		const self = ps.combatants.find((c) => c.isSelf);
 		const active = ps.activeCombatantId;
 		const isYourTurn = Boolean(self && ps.encounterRunning && self.id === active);
+		const isDowned = Boolean(self && self.deathState === "down");
+		if (!isDowned && sheetMode === "death") {
+			setSheetMode("none");
+		}
 		endRoundBtn.disabled = !isYourTurn;
 		sheetTurnCta.classList.toggle("is-visible", isYourTurn);
+		sheetDeathCta.classList.toggle("is-visible", isDowned);
 		editModeBtn.disabled = !self;
 		damageModeBtn.disabled = !self;
+		deathSaveModeBtn.disabled = !isDowned;
 		setSheetFromSelf(self ?? null);
 
 		const needsInitiative = Boolean(self && ps.encounterRunning && self.initiative === null);
@@ -796,6 +845,83 @@ export function bootPlayerClient(config: PlayerClientBootConfig): void {
 	}
 	damageModeBtn.onclick = () => {
 		void handleDamageModeClick().catch(handleAsyncError);
+	};
+
+	async function handleDeathSaveModeClick(): Promise<void> {
+		const self = lastState?.playerState.combatants.find((combatant) => combatant.isSelf) ?? null;
+		if (!self || self.deathState !== "down") {
+			return;
+		}
+		if (sheetMode === "death") {
+			setSheetMode("none");
+			return;
+		}
+		deathDraftFailures = Math.max(0, Math.min(3, Math.trunc(self.deathSaveFailures ?? 0)));
+		deathDraftSuccesses = Math.max(0, Math.min(3, Math.trunc(self.deathSaveSuccesses ?? 0)));
+		renderDeathSaveEditor();
+		setSheetMode("death");
+	}
+	deathSaveModeBtn.onclick = () => {
+		void handleDeathSaveModeClick().catch(handleAsyncError);
+	};
+
+	for (const button of deathSaveDiamondButtons) {
+		button.onclick = () => {
+			void (async () => {
+				if (!playerId) {
+					return;
+				}
+				const self = lastState?.playerState.combatants.find((combatant) => combatant.isSelf) ?? null;
+				if (!self || self.deathState !== "down") {
+					return;
+				}
+				const track = button.dataset.track;
+				const value = parseIntOrNull(button.dataset.value ?? "") ?? 0;
+				if (track === "failures") {
+					deathDraftFailures = value === 1 && deathDraftFailures === 1 ? 0 : value;
+				} else {
+					deathDraftSuccesses = value === 1 && deathDraftSuccesses === 1 ? 0 : value;
+				}
+				renderDeathSaveEditor();
+				await api("/api/player/death-saves", "POST", {
+					playerId,
+					failures: deathDraftFailures,
+					successes: deathDraftSuccesses,
+				});
+				await refresh();
+			})().catch(handleAsyncError);
+		};
+	}
+
+	confirmDeathBtn.onclick = () => {
+		void (async () => {
+			if (!playerId) {
+				return;
+			}
+			await api("/api/player/death-saves", "POST", {
+				playerId,
+				confirm: "dead",
+			});
+			await refresh();
+			setSheetMode("none");
+		})().catch(handleAsyncError);
+	};
+
+	confirmSavedBtn.onclick = () => {
+		void (async () => {
+			if (!playerId) {
+				return;
+			}
+			await api("/api/player/death-saves", "POST", {
+				playerId,
+				confirm: "saved",
+			});
+			await refresh();
+			setSheetMode("none");
+		})().catch(handleAsyncError);
+	};
+	deathSaveCloseBtn.onclick = () => {
+		setSheetMode("none");
 	};
 
 	sheetDamage.addEventListener("keydown", (event: KeyboardEvent) => {

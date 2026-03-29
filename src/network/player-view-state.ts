@@ -41,6 +41,8 @@ export function buildPlayerViewState(
 		activeCombatantId: session?.combatants[session.activeIndex]?.id ?? null,
 		combatants: visibleCombatants.map((combatant) => {
 			const isSelf = selfCombatantId === combatant.id;
+			const deathState = combatant.deathState ?? "normal";
+			const dead = deathState === "dead";
 			return {
 				id: combatant.id,
 				name: combatant.name,
@@ -48,7 +50,10 @@ export function buildPlayerViewState(
 				initiative: combatant.initiative,
 				initiativeRoll: combatant.initiativeRoll,
 				initiativeCriticalFailure: combatant.initiativeCriticalFailure,
-				hpLabel: computeHpStatusLabel(combatant.hpCurrent, combatant.hpMax, true),
+				hpLabel: computeHpStatusLabel(combatant.hpCurrent, combatant.hpMax, dead),
+				deathState,
+				deathSaveFailures: combatant.deathSaveFailures ?? 0,
+				deathSaveSuccesses: combatant.deathSaveSuccesses ?? 0,
 				isSelf,
 				hpCurrent: isSelf ? combatant.hpCurrent : null,
 				hpMax: isSelf ? combatant.hpMax : null,

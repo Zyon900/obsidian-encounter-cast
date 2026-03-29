@@ -50,6 +50,13 @@ export interface PlayerUpdatePayload {
 	ac?: number | null;
 }
 
+export interface PlayerDeathSavesPayload {
+	playerId: PlayerId;
+	successes?: number;
+	failures?: number;
+	confirm?: "dead" | "saved";
+}
+
 export interface EndTurnPayload {
 	playerId: PlayerId;
 }
@@ -66,6 +73,9 @@ export interface PlayerFacingState {
 		initiativeRoll: number | null;
 		initiativeCriticalFailure: boolean;
 		hpLabel: "unscathed" | "healthy" | "hurt" | "critically wounded" | "down" | "dead";
+		deathState: "normal" | "down" | "dead";
+		deathSaveFailures: number;
+		deathSaveSuccesses: number;
 		isSelf: boolean;
 		hpCurrent: number | null;
 		hpMax: number | null;
