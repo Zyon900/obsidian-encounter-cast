@@ -1,5 +1,5 @@
 import playerClientCss from "./app.css";
-import type { PlayerClientBootConfig } from "./player-runtime";
+import type { PlayerClientBootConfig } from "./player-config";
 import type { PlayerTheme } from "../player-events";
 
 export function renderPlayerPageHtml(theme: PlayerTheme | null, supportUrl: string | null): string {
