@@ -4,7 +4,6 @@ import type { PlayerTheme, StateSyncPayload } from "../player-events";
 import {
 	asPlayerJoinResult,
 	asPlayerStateResult,
-	isApiResult,
 	isRecord,
 	isStateSyncPayload,
 	parseJson,
@@ -12,14 +11,10 @@ import {
 import {
 	applyIconToSvg,
 	clearChildren,
-	createHeartSvg,
-	createHexIconSvg,
 	createEl,
-	createIconSvg,
-	createShieldSvg,
-	createSkullSvg,
 	requireEl,
 } from "./runtime-dom";
+import { isIconPathName } from "../../utils/icon-paths";
 import {
 	hpClass,
 	hpStateClass,
@@ -44,40 +39,13 @@ export interface PlayerClientBootConfig {
 	theme: PlayerTheme | null;
 }
 
-export const PLAYER_CLIENT_RUNTIME_HELPERS = [
-	requireEl,
-	createEl,
-	parseIntOrNull,
-	clearChildren,
-	createIconSvg,
-	createHexIconSvg,
-	createShieldSvg,
-	createHeartSvg,
-	createSkullSvg,
-	applyIconToSvg,
-	createInitiativeBadge,
-	createDeathSaveIndicator,
-	createShield,
-	createSheetShield,
-	createSheetHeart,
-	hpClass,
-	hpStateClass,
-	sentenceCaseLabel,
-	isRecord,
-	isApiResult,
-	isStateSyncPayload,
-	asPlayerJoinResult,
-	asPlayerStateResult,
-	parseJson,
-] as const;
-
 export function bootPlayerClient(config: PlayerClientBootConfig): void {
 	function hydrateTemplateIcons(): void {
 		const iconSvgs = Array.from(document.querySelectorAll<SVGSVGElement>("svg[data-ec-icon]"));
 		for (const svg of iconSvgs) {
 			try {
 				const iconName = svg.dataset.ecIcon;
-				if (!iconName) {
+				if (!iconName || !isIconPathName(iconName)) {
 					continue;
 				}
 				applyIconToSvg(svg, iconName);
@@ -315,6 +283,15 @@ export function bootPlayerClient(config: PlayerClientBootConfig): void {
 		return parseIntOrNull(el.value);
 	}
 
+	function getSelfCombatant(state: StateSyncPayload | null): PlayerCombatant | null {
+		return state?.playerState.combatants.find((combatant) => combatant.isSelf) ?? null;
+	}
+
+	function resetDeathSaveDraft(self: PlayerCombatant | null): void {
+		deathDraftFailures = Math.max(0, Math.min(3, Math.trunc(self?.deathSaveFailures ?? 0)));
+		deathDraftSuccesses = Math.max(0, Math.min(3, Math.trunc(self?.deathSaveSuccesses ?? 0)));
+	}
+
 	function handleServerShutdown(message: string): void {
 		if (serverShutDown) {
 			return;
@@ -390,6 +367,9 @@ export function bootPlayerClient(config: PlayerClientBootConfig): void {
 		damageModeBtn.classList.toggle("is-hidden", isDeath);
 		sheetActions.classList.toggle("is-hidden", isDeath);
 		sheetDeathCta.classList.toggle("is-hidden", isEdit || isDamage || isDeath);
+		if (isEdit || isDamage || isDeath) {
+			sheetDeathCta.classList.remove("is-visible");
+		}
 		sheetSummary.classList.toggle("is-hidden", isEdit);
 		editModeBtn.textContent = isEdit ? "Save stats" : "Edit stats";
 		setDamageButtonLabel(isDamage);
@@ -445,8 +425,7 @@ export function bootPlayerClient(config: PlayerClientBootConfig): void {
 			sheetDamage.value = "";
 		}
 
-		deathDraftFailures = Math.max(0, Math.min(3, Math.trunc(self.deathSaveFailures ?? 0)));
-		deathDraftSuccesses = Math.max(0, Math.min(3, Math.trunc(self.deathSaveSuccesses ?? 0)));
+		resetDeathSaveDraft(self);
 		renderDeathSaveEditor();
 	}
 
@@ -454,7 +433,7 @@ export function bootPlayerClient(config: PlayerClientBootConfig): void {
 		if (sheetMode !== "edit") {
 			return;
 		}
-		const self = lastState?.playerState.combatants.find((combatant) => combatant.isSelf) ?? null;
+		const self = getSelfCombatant(lastState);
 		setSheetFromSelf(self);
 		setSheetMode("none");
 	}
@@ -478,7 +457,7 @@ export function bootPlayerClient(config: PlayerClientBootConfig): void {
 		if (!playerId || !lastState) {
 			return;
 		}
-		const self = lastState.playerState.combatants.find((c) => c.isSelf);
+		const self = getSelfCombatant(lastState);
 		if (!self) {
 			return;
 		}
@@ -535,6 +514,7 @@ export function bootPlayerClient(config: PlayerClientBootConfig): void {
 			: window.innerHeight;
 		const buttonRect = damageModeBtn.getBoundingClientRect();
 		const isTouchLike = window.matchMedia("(pointer: coarse)").matches;
+		// iOS/Android often add an accessory bar above the keyboard; keep action buttons above it.
 		const keyboardAccessoryGuard = window.visualViewport && isTouchLike ? 62 : 0;
 		const safeBottom = viewportBottom - (10 + keyboardAccessoryGuard);
 		if (buttonRect.bottom > safeBottom) {
@@ -569,7 +549,7 @@ export function bootPlayerClient(config: PlayerClientBootConfig): void {
 		titleEl.textContent = `Round ${ps.round}`;
 		statusEl.textContent = ps.encounterRunning ? "Combat running" : "Waiting for combat start";
 
-		const self = ps.combatants.find((c) => c.isSelf);
+		const self = getSelfCombatant(state);
 		const active = ps.activeCombatantId;
 		const isYourTurn = Boolean(self && ps.encounterRunning && self.id === active);
 		const isDowned = Boolean(self && self.deathState === "down");
@@ -578,7 +558,7 @@ export function bootPlayerClient(config: PlayerClientBootConfig): void {
 		}
 		endRoundBtn.disabled = !isYourTurn;
 		sheetTurnCta.classList.toggle("is-visible", isYourTurn);
-		sheetDeathCta.classList.toggle("is-visible", isDowned);
+		sheetDeathCta.classList.toggle("is-visible", isDowned && sheetMode !== "death");
 		editModeBtn.disabled = !self;
 		damageModeBtn.disabled = !self;
 		deathSaveModeBtn.disabled = !isDowned;
@@ -591,6 +571,7 @@ export function bootPlayerClient(config: PlayerClientBootConfig): void {
 			closeInitiativeGate();
 		}
 
+		// FLIP-style list animation snapshot: measure previous layout before rebuilding rows.
 		const previousElements = new Map<string, HTMLElement>();
 		const previousRects = new Map<string, DOMRect>();
 		for (const node of Array.from(listEl.children)) {
@@ -878,7 +859,7 @@ export function bootPlayerClient(config: PlayerClientBootConfig): void {
 	};
 
 	async function handleDeathSaveModeClick(): Promise<void> {
-		const self = lastState?.playerState.combatants.find((combatant) => combatant.isSelf) ?? null;
+		const self = getSelfCombatant(lastState);
 		if (!self || self.deathState !== "down") {
 			return;
 		}
@@ -886,8 +867,7 @@ export function bootPlayerClient(config: PlayerClientBootConfig): void {
 			setSheetMode("none");
 			return;
 		}
-		deathDraftFailures = Math.max(0, Math.min(3, Math.trunc(self.deathSaveFailures ?? 0)));
-		deathDraftSuccesses = Math.max(0, Math.min(3, Math.trunc(self.deathSaveSuccesses ?? 0)));
+		resetDeathSaveDraft(self);
 		renderDeathSaveEditor();
 		setSheetMode("death");
 	}
@@ -901,7 +881,7 @@ export function bootPlayerClient(config: PlayerClientBootConfig): void {
 				if (!playerId) {
 					return;
 				}
-				const self = lastState?.playerState.combatants.find((combatant) => combatant.isSelf) ?? null;
+				const self = getSelfCombatant(lastState);
 				if (!self || self.deathState !== "down") {
 					return;
 				}

@@ -1,6 +1,8 @@
 import { randomBytes, timingSafeEqual } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import { createServer, type IncomingMessage, type Server as HttpServer, type ServerResponse } from "node:http";
 import { networkInterfaces } from "node:os";
+import { join } from "node:path";
 import {
 	advanceCombatTurn,
 	createCombatSession,
@@ -52,6 +54,8 @@ export class CombatServer {
 	private encounterRunning = false;
 	private theme: PlayerTheme | null = null;
 	private supportUrl: string | null = null;
+	private playerClientScript: string | null = null;
+	private assetRootDir = ".";
 	private readonly players = new Map<PlayerId, PlayerPresenceState>();
 	private readonly sseClients = new Map<PlayerId, Set<ServerResponse>>();
 	private onSessionChange: ((session: CombatSession | null) => void) | null = null;
@@ -144,6 +148,11 @@ export class CombatServer {
 		this.supportUrl = url;
 	}
 
+	setAssetRootDir(dir: string): void {
+		this.assetRootDir = dir;
+		this.playerClientScript = null;
+	}
+
 	setOnSessionChange(callback: ((session: CombatSession | null) => void) | null): void {
 		this.onSessionChange = callback;
 	}
@@ -188,6 +197,16 @@ export class CombatServer {
 			const method = req.method ?? "GET";
 			if (pathname === "/health") {
 				this.sendJson(res, 200, { ok: true });
+				return;
+			}
+			if (pathname === "/favicon.ico") {
+				res.statusCode = 204;
+				res.end();
+				return;
+			}
+			if (pathname === "/player-client.js" && method === "GET") {
+				const script = await this.loadPlayerClientScript();
+				this.sendJavascript(res, 200, script);
 				return;
 			}
 
@@ -601,6 +620,13 @@ export class CombatServer {
 		res.end(html);
 	}
 
+	private sendJavascript(res: ServerResponse, statusCode: number, script: string): void {
+		res.statusCode = statusCode;
+		res.setHeader("Content-Type", "application/javascript; charset=utf-8");
+		res.setHeader("Cache-Control", "no-store");
+		res.end(script);
+	}
+
 	private sendSvg(res: ServerResponse, statusCode: number, svg: string): void {
 		res.statusCode = statusCode;
 		res.setHeader("Content-Type", "image/svg+xml; charset=utf-8");
@@ -659,6 +685,15 @@ export class CombatServer {
 		}
 
 		return new URL(url, "http://encounter-cast.local").pathname;
+	}
+
+	private async loadPlayerClientScript(): Promise<string> {
+		if (this.playerClientScript !== null) {
+			return this.playerClientScript;
+		}
+		const scriptPath = join(this.assetRootDir, "player-client.js");
+		this.playerClientScript = await readFile(scriptPath, "utf8");
+		return this.playerClientScript;
 	}
 
 	private buildInviteUrls(port: number, token: string): string[] {

@@ -12,8 +12,20 @@ if you want to view the source, please visit the github repository of this plugi
 
 const prod = (process.argv[2] === "production");
 const nodeBuiltins = [...builtinModules, ...builtinModules.map((name) => `node:${name}`)];
+const copyOutputsPlugin = {
+	name: "copy-to-obsidian-vault",
+	setup(build) {
+		build.onEnd((result) => {
+			if (result.errors.length > 0) {
+				return;
+			}
 
-const context = await esbuild.context({
+			syncPluginBuildOutputs({ reason: prod ? "build" : "dev" });
+		});
+	},
+};
+
+const pluginContext = await esbuild.context({
 	banner: {
 		js: banner,
 	},
@@ -39,7 +51,6 @@ const context = await esbuild.context({
 	target: "es2018",
 	loader: {
 		".css": "text",
-		".html": "text",
 	},
 	jsx: "automatic",
 	jsxImportSource: "preact",
@@ -48,25 +59,31 @@ const context = await esbuild.context({
 	treeShaking: true,
 	outfile: "main.js",
 	minify: prod,
-	plugins: [
-		{
-			name: "copy-to-obsidian-vault",
-			setup(build) {
-				build.onEnd((result) => {
-					if (result.errors.length > 0) {
-						return;
-					}
+	plugins: [copyOutputsPlugin],
+});
 
-					syncPluginBuildOutputs({ reason: prod ? "build" : "dev" });
-				});
-			},
-		},
-	],
+const playerClientContext = await esbuild.context({
+	banner: {
+		js: banner,
+	},
+	entryPoints: ["src/network/player-client/app.tsx"],
+	bundle: true,
+	format: "iife",
+	platform: "browser",
+	target: "es2018",
+	jsx: "automatic",
+	jsxImportSource: "preact",
+	logLevel: "info",
+	sourcemap: prod ? false : "inline",
+	treeShaking: true,
+	outfile: "player-client.js",
+	minify: prod,
+	plugins: [copyOutputsPlugin],
 });
 
 if (prod) {
-	await context.rebuild();
+	await Promise.all([pluginContext.rebuild(), playerClientContext.rebuild()]);
 	process.exit(0);
 } else {
-	await context.watch();
+	await Promise.all([pluginContext.watch(), playerClientContext.watch()]);
 }

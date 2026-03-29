@@ -1,4 +1,5 @@
 import { Notice, Plugin, TFile, type MarkdownPostProcessorContext, type MarkdownSectionInformation } from "obsidian";
+import { join } from "node:path";
 import { DiceRollerAdapter } from "./dice/dice-roller-adapter";
 import {
 	addCombatantsToSession,
@@ -165,6 +166,7 @@ export default class EncounterCastPlugin extends Plugin {
 
 		await this.monsterManager.initialize();
 		this.monsterManager.setHoverPreviewLayout(this.settings.hoverPreviewWidthPx, this.settings.hoverPreviewWideColumns);
+		this.encounterServer.setAssetRootDir(this.resolvePluginAssetRootDir());
 		this.encounterServer.setOnSessionChange((session) => {
 			this.currentSession = session;
 			if (!session) {
@@ -289,6 +291,20 @@ export default class EncounterCastPlugin extends Plugin {
 		this.cleanupRegistry.add(() => {
 			window.removeEventListener("resize", refreshOnResize);
 		});
+	}
+
+	private resolvePluginAssetRootDir(): string {
+		const adapter = this.app.vault.adapter as { getBasePath?: () => string; basePath?: string };
+		const vaultBasePath =
+			typeof adapter.getBasePath === "function"
+				? adapter.getBasePath()
+				: typeof adapter.basePath === "string"
+					? adapter.basePath
+					: null;
+		if (vaultBasePath && vaultBasePath.length > 0) {
+			return join(vaultBasePath, this.app.vault.configDir, "plugins", this.manifest.id);
+		}
+		return this.manifest.dir ?? ".";
 	}
 
 	onunload(): void {

@@ -1,7 +1,7 @@
 import { copyFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
-const OUTPUT_FILES = ["main.js", "styles.css", "manifest.json"];
+const OUTPUT_FILES = ["main.js", "styles.css", "manifest.json", "player-client.js"];
 
 function parseDotEnv(content) {
 	const parsed = {};
