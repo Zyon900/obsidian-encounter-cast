@@ -1,6 +1,12 @@
 import { Menu, setIcon } from "obsidian";
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import type { Combatant } from "../../encounter/combat-session";
+import {
+	createHeartIconElement,
+	createHexagonIconElement,
+	createShieldIconElement,
+	createSkullIconElement,
+} from "../../utils/icon-factory-tsx";
 import { MonsterHoverPreviewTrigger } from "../monsters/monster-hover-preview-trigger";
 import type { DashboardActions, DashboardViewModel } from "./types";
 
@@ -547,9 +553,7 @@ function InitiativeDie({
 				}
 			}}
 		>
-			<svg className="encounter-cast-initiative-die-icon" viewBox="0 0 32 32" aria-hidden="true">
-				<path d="M16 2 27.8 8.7 27.8 23.3 16 30 4.2 23.3 4.2 8.7Z" />
-			</svg>
+			{createHexagonIconElement({ className: "encounter-cast-initiative-die-icon" })}
 			{isEditing ? (
 				<input
 					ref={inputRef}
@@ -639,9 +643,7 @@ function ArmorClassShield({
 				}
 			}}
 		>
-			<svg className="encounter-cast-ac-shield-icon" viewBox="0 0 32 32" aria-hidden="true">
-				<path d="M16 2C18.4 3.5 21 4.8 27.4 7.1V15.8C27.4 22 23.2 27 16 30C8.8 27 4.6 22 4.6 15.8V7.1C11 4.8 13.6 3.5 16 2Z" />
-			</svg>
+			{createShieldIconElement({ className: "encounter-cast-ac-shield-icon" })}
 			{isEditing ? (
 				<input
 					ref={inputRef}
@@ -850,9 +852,7 @@ function CombatantRow({
 					{isPlayerCombatant ? (
 						<div className="encounter-cast-combatant-player-hp" title="Player HP">
 							<span className="encounter-cast-combatant-player-heart" aria-hidden="true">
-								<svg viewBox="0 0 32 32">
-									<path d="M16 28C10.4 24.3 5.2 19.5 5.2 13.3C5.2 9.4 8.2 6.4 12.1 6.4C13.7 6.4 15.1 6.9 16 7.9C16.9 6.9 18.3 6.4 19.9 6.4C23.8 6.4 26.8 9.4 26.8 13.3C26.8 19.5 21.6 24.3 16 28Z" />
-								</svg>
+								{createHeartIconElement({ ariaHidden: true })}
 							</span>
 							<span className="encounter-cast-combatant-player-hp-main">
 								{combatant.hpCurrent ?? "-"} / {combatant.hpMax ?? "-"}
@@ -935,8 +935,6 @@ function MonsterInfoButton({ onClick }: { onClick: () => void }) {
 function DeathSaveIndicator({ successes, failures }: { successes: number; failures: number }) {
 	const clampedSuccesses = Math.max(0, Math.min(3, Math.trunc(successes)));
 	const clampedFailures = Math.max(0, Math.min(3, Math.trunc(failures)));
-	const heartPath = "M16 28C10.4 24.3 5.2 19.5 5.2 13.3C5.2 9.4 8.2 6.4 12.1 6.4C13.7 6.4 15.1 6.9 16 7.9C16.9 6.9 18.3 6.4 19.9 6.4C23.8 6.4 26.8 9.4 26.8 13.3C26.8 19.5 21.6 24.3 16 28Z";
-	const skullPath = "M16 4C10.5 4 6 8.5 6 14v3.5c0 2.6 1.8 4.8 4.2 5.4V28h2.8v-2h6v2h2.8v-5.1c2.4-.6 4.2-2.8 4.2-5.4V14c0-5.5-4.5-10-10-10ZM12.2 13.6a1.4 1.4 0 1 1 0 2.8 1.4 1.4 0 0 1 0-2.8Zm7.6 0a1.4 1.4 0 1 1 0 2.8 1.4 1.4 0 0 1 0-2.8ZM13 20.2h6";
 	const createDiamond = (filled: boolean) => {
 		return <span className={`encounter-cast-death-save-diamond ${filled ? "is-filled" : ""}`} aria-hidden="true">{filled ? "◆" : "◇"}</span>;
 	};
@@ -945,7 +943,7 @@ function DeathSaveIndicator({ successes, failures }: { successes: number; failur
 		<div className="encounter-cast-death-save-indicator" aria-label="Death saves">
 			<div className="encounter-cast-death-save-row is-failures">
 				<span className="encounter-cast-death-save-icon" aria-hidden="true">
-					<svg viewBox="0 0 32 32"><path d={skullPath} /></svg>
+					{createSkullIconElement({ ariaHidden: true })}
 				</span>
 				{createDiamond(clampedFailures >= 1)}
 				{createDiamond(clampedFailures >= 2)}
@@ -953,7 +951,7 @@ function DeathSaveIndicator({ successes, failures }: { successes: number; failur
 			</div>
 			<div className="encounter-cast-death-save-row is-successes">
 				<span className="encounter-cast-death-save-icon" aria-hidden="true">
-					<svg viewBox="0 0 32 32"><path d={heartPath} /></svg>
+					{createHeartIconElement({ ariaHidden: true })}
 				</span>
 				{createDiamond(clampedSuccesses >= 1)}
 				{createDiamond(clampedSuccesses >= 2)}

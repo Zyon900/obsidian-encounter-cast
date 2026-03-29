@@ -10,9 +10,14 @@ import {
 	parseJson,
 } from "./runtime-guards";
 import {
+	applyIconToSvg,
 	clearChildren,
+	createHeartSvg,
+	createHexIconSvg,
 	createEl,
 	createIconSvg,
+	createShieldSvg,
+	createSkullSvg,
 	requireEl,
 } from "./runtime-dom";
 import {
@@ -45,6 +50,11 @@ export const PLAYER_CLIENT_RUNTIME_HELPERS = [
 	parseIntOrNull,
 	clearChildren,
 	createIconSvg,
+	createHexIconSvg,
+	createShieldSvg,
+	createHeartSvg,
+	createSkullSvg,
+	applyIconToSvg,
 	createInitiativeBadge,
 	createDeathSaveIndicator,
 	createShield,
@@ -62,6 +72,21 @@ export const PLAYER_CLIENT_RUNTIME_HELPERS = [
 ] as const;
 
 export function bootPlayerClient(config: PlayerClientBootConfig): void {
+	function hydrateTemplateIcons(): void {
+		const iconSvgs = Array.from(document.querySelectorAll<SVGSVGElement>("svg[data-ec-icon]"));
+		for (const svg of iconSvgs) {
+			try {
+				const iconName = svg.dataset.ecIcon;
+				if (!iconName) {
+					continue;
+				}
+				applyIconToSvg(svg, iconName);
+			} catch (error) {
+				console.error("[encounter-cast] failed to hydrate template icon", error);
+			}
+		}
+	}
+
 	function applyThemeCssVars(theme: PlayerTheme | null): void {
 		if (!theme) {
 			return;
@@ -195,6 +220,11 @@ export function bootPlayerClient(config: PlayerClientBootConfig): void {
 	}
 
 	applyThemeCssVars(config.theme);
+	try {
+		hydrateTemplateIcons();
+	} catch (error) {
+		console.error("[encounter-cast] icon hydration failed", error);
+	}
 
 	const token = new URLSearchParams(window.location.search).get("token") ?? "";
 
