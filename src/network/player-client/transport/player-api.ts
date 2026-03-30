@@ -7,23 +7,8 @@ import type {
 	PlayerJoinRequest,
 	PlayerUpdatePayload,
 	StateSyncPayload,
-} from "../player-events";
-
-interface ApiResult {
-	ok: boolean;
-	error?: string;
-}
-
-interface PlayerJoinApiResult extends ApiResult {
-	player?: {
-		playerId: string;
-	};
-	state?: StateSyncPayload;
-}
-
-interface PlayerStateApiResult extends ApiResult {
-	state?: StateSyncPayload;
-}
+} from "../../player-contracts";
+import type { ApiResult, PlayerJoinApiResult, PlayerStateApiResult } from "./types";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null;
@@ -59,7 +44,8 @@ function parseJoinResult(value: unknown): PlayerJoinApiResult {
 		result.player = { playerId: value.player.playerId };
 	}
 	if (isStateSyncPayload(value.state)) {
-		result.state = value.state;
+		const stateValue: StateSyncPayload = value.state;
+		result.state = stateValue;
 	}
 	return result;
 }

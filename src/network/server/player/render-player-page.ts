@@ -1,6 +1,6 @@
-import playerClientCss from "./app.css";
-import type { PlayerClientBootConfig } from "./player-config";
-import type { PlayerTheme } from "../player-events";
+import playerClientCss from "../../player-client/app.css";
+import type { PlayerClientBootConfig } from "../../player-client/player-config";
+import type { PlayerTheme } from "../../player-contracts";
 
 export function renderPlayerPageHtml(theme: PlayerTheme | null, supportUrl: string | null): string {
 	const config: PlayerClientBootConfig = {

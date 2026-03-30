@@ -1,5 +1,5 @@
-import type { StateSyncPayload } from "../player-events";
-import type { RollType, SheetMode } from "./player-selectors";
+import type { StateSyncPayload } from "../player-contracts";
+import type { RollType, SheetMode } from "./player-types";
 
 export type TopView = "join" | "qr" | "app" | "shutdown" | "kicked";
 

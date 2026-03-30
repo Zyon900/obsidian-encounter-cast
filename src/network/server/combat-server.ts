@@ -17,7 +17,7 @@ import {
 	setCombatantTempHp,
 	upsertPlayerCombatant,
 	type CombatSession,
-} from "../encounter/combat-session";
+} from "../../encounter/combat-session";
 import type {
 	CombatantId,
 	EndTurnPayload,
@@ -30,10 +30,10 @@ import type {
 	PlayerTheme,
 	PlayerUpdatePayload,
 	StateSyncPayload,
-} from "./player-events";
-import { buildPlayerViewState } from "./player-view-state";
-import { renderInviteQrSvg } from "./player-client/invite-qr";
-import { renderPlayerPageHtml } from "./player-client/render-player-page";
+} from "../player-contracts";
+import { buildPlayerViewState } from "./player/player-view-state";
+import { renderInviteQrSvg } from "./player/invite-qr";
+import { renderPlayerPageHtml } from "./player/render-player-page";
 
 export interface CombatServerState {
 	running: boolean;

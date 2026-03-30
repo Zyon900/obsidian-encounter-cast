@@ -12,7 +12,6 @@
   --ec-text-on-accent: #ffffff;
   --ec-border: #3a3a3a;
 }
-:root { color-scheme: dark light; }
 body {
   margin: 0;
   font-family: ui-sans-serif, system-ui, sans-serif;

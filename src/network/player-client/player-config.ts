@@ -1,4 +1,4 @@
-import type { PlayerTheme } from "../player-events";
+import type { PlayerTheme } from "../player-contracts";
 
 export interface PlayerClientBootConfig {
 	supportUrl: string | null;

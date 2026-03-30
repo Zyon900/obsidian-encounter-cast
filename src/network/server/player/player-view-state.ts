@@ -1,5 +1,5 @@
-import type { CombatSession } from "../encounter/combat-session";
-import type { PlayerFacingState, PlayerPresenceState, PlayerTheme } from "./player-events";
+import type { CombatSession } from "../../../encounter/combat-session";
+import type { PlayerFacingState, PlayerPresenceState, PlayerTheme } from "../../player-contracts";
 
 export type HpStatusLabel = "unscathed" | "healthy" | "hurt" | "critically wounded" | "down" | "dead";
 

@@ -1,4 +1,5 @@
-import type { StateSyncPayload } from "../player-events";
+import type { StateSyncPayload } from "../../player-contracts";
+import type { PlayerStreamHandlers } from "./types";
 
 function parseJson(raw: string): unknown {
 	try {
@@ -17,13 +18,6 @@ function isStateSyncPayload(value: unknown): value is StateSyncPayload {
 		return false;
 	}
 	return Array.isArray(value.playerState.combatants) && typeof value.playerState.round === "number";
-}
-
-export interface PlayerStreamHandlers {
-	onStateSync: (state: StateSyncPayload) => void;
-	onServerShutdown: (message: string) => void;
-	onPlayerKicked: (message: string) => void;
-	onDisconnected: () => void;
 }
 
 export function createPlayerEventStream(

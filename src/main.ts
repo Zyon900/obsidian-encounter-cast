@@ -24,8 +24,8 @@ import { resolveEncounterEntries, type ResolveEncounterResult, type ResolvedEnco
 import { CodeblockSuggest } from "./encounter/codeblock-suggest";
 import type { MonsterRecord } from "./monsters/types";
 import { MonsterManager } from "./monsters/monster-manager";
-import { CombatServer } from "./network/combat-server";
-import type { PlayerTheme } from "./network/player-events";
+import { CombatServer } from "./network/server/combat-server";
+import type { PlayerTheme } from "./network/player-contracts";
 import type { CodeblockRow } from "./ui/encounter/codeblock-widget";
 import { PartySettingsModal } from "./ui/encounter/party-settings-modal";
 import { CombatantRenameModal } from "./ui/dashboard/combatant-rename-modal";
