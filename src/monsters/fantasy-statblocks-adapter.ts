@@ -17,6 +17,9 @@ interface FantasyStatblocksPlugin {
 	creature_view?: {
 		render(monster: unknown): void | Promise<void>;
 		leaf?: unknown;
+		statblockEl?: HTMLElement;
+		contentEl?: HTMLElement;
+		containerEl?: HTMLElement;
 	};
 	openCreatureView?(forceNew?: boolean): Promise<unknown>;
 }
@@ -70,6 +73,13 @@ export class FantasyStatblocksAdapter {
 		}
 
 		await plugin.creature_view.render(creatureToRender);
+	}
+
+	async rollAllCreaturePreviewDice(): Promise<number> {
+		const plugin = this.requirePlugin();
+		const roots = this.resolveCreatureViewRoots(plugin);
+		await this.waitForCreatureDice(roots);
+		return this.clickDiceElements(roots);
 	}
 
 	async openCreatureHoverPreview(monster: MonsterRecord): Promise<void> {
@@ -157,6 +167,63 @@ export class FantasyStatblocksAdapter {
 	private resolveCreatureForRender(plugin: FantasyStatblocksPlugin, monster: MonsterRecord): unknown {
 		const bestiaryMonster = plugin.api?.getCreatureFromBestiary?.(monster.name);
 		return bestiaryMonster ?? monster.raw;
+	}
+
+	private resolveCreatureViewRoots(plugin: FantasyStatblocksPlugin): HTMLElement[] {
+		const roots = new Set<HTMLElement>();
+		const view = plugin.creature_view;
+		if (view?.statblockEl && view.statblockEl.isConnected) {
+			roots.add(view.statblockEl);
+		}
+		if (view?.contentEl && view.contentEl.isConnected) {
+			roots.add(view.contentEl);
+		}
+		if (view?.containerEl && view.containerEl.isConnected) {
+			roots.add(view.containerEl);
+		}
+
+		const domFallback = document.querySelector(".creature-statblock-container");
+		if (domFallback instanceof HTMLElement && domFallback.isConnected) {
+			roots.add(domFallback);
+		}
+
+		return Array.from(roots);
+	}
+
+	private async waitForCreatureDice(roots: HTMLElement[]): Promise<void> {
+		for (let attempt = 0; attempt < 6; attempt++) {
+			if (this.collectDiceElements(roots).length > 0) {
+				return;
+			}
+			await new Promise<void>((resolve) => window.setTimeout(resolve, 30));
+		}
+	}
+
+	private clickDiceElements(roots: HTMLElement[]): number {
+		const candidates = this.collectDiceElements(roots);
+		for (const element of candidates) {
+			element.click();
+		}
+		return candidates.length;
+	}
+
+	private collectDiceElements(roots: HTMLElement[]): HTMLElement[] {
+		const selectors = [
+			".dice-roller-button",
+			".dice-roller",
+		].join(",");
+
+		const unique = new Set<HTMLElement>();
+		for (const root of roots) {
+			const nodes = root.querySelectorAll(selectors);
+			nodes.forEach((node) => {
+				if (!(node instanceof HTMLElement)) {
+					return;
+				}
+				unique.add(node);
+			});
+		}
+		return Array.from(unique);
 	}
 
 	private ensureHoverContainer(): void {

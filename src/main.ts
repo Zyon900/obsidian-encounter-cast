@@ -40,6 +40,7 @@ import { CleanupRegistry } from "./utils/cleanup-registry";
 
 export interface EncounterCastSettings extends EncounterPartySettings {
 	rollMonsterHp: boolean;
+	rollAllDiceOnMonsterInfoOpen: boolean;
 	hoverPreviewEnabled: boolean;
 	hoverPreviewDelayMs: number;
 	hoverPreviewHideDelayMs: number;
@@ -51,6 +52,7 @@ const DEFAULT_SETTINGS: EncounterCastSettings = {
 	partyMembers: null,
 	partyLevel: null,
 	rollMonsterHp: false,
+	rollAllDiceOnMonsterInfoOpen: false,
 	hoverPreviewEnabled: true,
 	hoverPreviewDelayMs: 500,
 	hoverPreviewHideDelayMs: 500,
@@ -153,7 +155,7 @@ export default class EncounterCastPlugin extends Plugin {
 						this.updateCombatantDexMod(combatantId, value);
 					},
 					onOpenMonster: (monster) => {
-						void this.openMonsterInfo(monster);
+						void this.openMonsterInfo(monster, "dashboard");
 					},
 					onHoverMonster: (monster, anchorEl) => {
 						void this.openMonsterHoverInfo(monster, anchorEl);
@@ -251,7 +253,7 @@ export default class EncounterCastPlugin extends Plugin {
 				hoverPreviewEnabled: this.settings.hoverPreviewEnabled,
 				hoverPreviewDelayMs: this.settings.hoverPreviewDelayMs,
 				onInfo: (monster) => {
-					void this.openMonsterInfo(monster);
+					void this.openMonsterInfo(monster, "codeblock");
 				},
 				onHoverInfo: (monster, anchorEl) => {
 					void this.openMonsterHoverInfo(monster, anchorEl);
@@ -1135,6 +1137,14 @@ export default class EncounterCastPlugin extends Plugin {
 		await this.saveData(this.settings);
 	}
 
+	async updateRollAllDiceOnMonsterInfoOpenSetting(rollAllDiceOnMonsterInfoOpen: boolean): Promise<void> {
+		this.settings = {
+			...this.settings,
+			rollAllDiceOnMonsterInfoOpen,
+		};
+		await this.saveData(this.settings);
+	}
+
 	async updateHoverPreviewSettings(settings: {
 		hoverPreviewEnabled: boolean;
 		hoverPreviewDelayMs: number;
@@ -1201,9 +1211,12 @@ export default class EncounterCastPlugin extends Plugin {
 		}
 	}
 
-	private async openMonsterInfo(monster: MonsterRecord): Promise<void> {
+	private async openMonsterInfo(monster: MonsterRecord, source: "dashboard" | "codeblock"): Promise<void> {
 		try {
 			await this.monsterManager.openCreaturePreview(monster);
+			if (source === "dashboard" && this.settings.rollAllDiceOnMonsterInfoOpen) {
+				await this.monsterManager.rollAllCreaturePreviewDice();
+			}
 		} catch (error) {
 			const message = error instanceof Error ? error.message : "Failed to open creature preview.";
 			new Notice(message);
@@ -1328,6 +1341,10 @@ function mergeSettings(value: unknown): EncounterCastSettings {
 		partyMembers: Number.isInteger(candidate.partyMembers) ? candidate.partyMembers ?? null : null,
 		partyLevel: Number.isInteger(candidate.partyLevel) ? candidate.partyLevel ?? null : null,
 		rollMonsterHp: typeof candidate.rollMonsterHp === "boolean" ? candidate.rollMonsterHp : DEFAULT_SETTINGS.rollMonsterHp,
+		rollAllDiceOnMonsterInfoOpen:
+			typeof candidate.rollAllDiceOnMonsterInfoOpen === "boolean"
+				? candidate.rollAllDiceOnMonsterInfoOpen
+				: DEFAULT_SETTINGS.rollAllDiceOnMonsterInfoOpen,
 		hoverPreviewEnabled:
 			typeof candidate.hoverPreviewEnabled === "boolean"
 				? candidate.hoverPreviewEnabled

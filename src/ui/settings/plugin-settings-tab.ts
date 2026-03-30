@@ -54,6 +54,15 @@ export class EncounterCastSettingTab extends PluginSettingTab {
 				}),
 			);
 
+		new Setting(containerEl)
+			.setName("Roll all dice on monster info open")
+			.setDesc("When opening monster info from the dashboard, click all rendered statblock dice in the creature pane.")
+			.addToggle((toggle) =>
+				toggle.setValue(settings.rollAllDiceOnMonsterInfoOpen).onChange((value) => {
+					void this.plugin.updateRollAllDiceOnMonsterInfoOpenSetting(value);
+				}),
+			);
+
 		new Setting(containerEl).setName("Monster hover preview").setHeading();
 		new Setting(containerEl)
 			.setName("Enable monster hover preview")

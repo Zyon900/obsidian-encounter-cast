@@ -134,6 +134,10 @@ export class MonsterManager {
 		await this.adapter.openCreaturePreview(monster);
 	}
 
+	async rollAllCreaturePreviewDice(): Promise<number> {
+		return this.adapter.rollAllCreaturePreviewDice();
+	}
+
 	async openCreatureHoverPreview(monster: MonsterRecord): Promise<void> {
 		await this.adapter.openCreatureHoverPreview(monster);
 	}
