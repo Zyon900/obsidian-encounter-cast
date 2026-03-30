@@ -1,6 +1,7 @@
 import { Menu, setIcon } from "obsidian";
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import type { Combatant } from "../../encounter/combat-session";
+import { hotkeyFromKeyboardEvent, normalizeHotkey, type DashboardHotkeyAction } from "./hotkeys";
 import {
 	createHeartIconElement,
 	createHexagonIconElement,
@@ -59,6 +60,7 @@ export function DashboardPanel({ model, actions }: DashboardPanelProps) {
 	const suppressAnimationRef = useRef(true);
 	const previousOrderKeyRef = useRef("");
 	const previousActiveCombatantIdRef = useRef<string | null>(null);
+	const pendingKeyboardSelectionScrollIdRef = useRef<string | null>(null);
 	const primaryInvite = model.inviteUrls[0] ?? null;
 	const session = model.session;
 	const canControlTurns = Boolean(session && model.encounterRunning && session.combatants.length > 0);
@@ -178,6 +180,149 @@ export function DashboardPanel({ model, actions }: DashboardPanelProps) {
 				}),
 		);
 		menu.showAtMouseEvent(event);
+	};
+
+	const getOrderedSelectedCombatants = (): Combatant[] => {
+		if (!session || selectedCombatantIds.length === 0) {
+			return [];
+		}
+
+		const selectedSet = new Set(selectedCombatantIds);
+		return session.combatants.filter((combatant) => selectedSet.has(combatant.id));
+	};
+
+	const moveSelectionBy = (delta: number): void => {
+		if (!session || session.combatants.length === 0) {
+			return;
+		}
+
+		const monsterCombatants = session.combatants.filter((combatant) => combatant.isPlayer !== true);
+		if (monsterCombatants.length === 0) {
+			return;
+		}
+
+		const orderedSelection = getOrderedSelectedCombatants();
+		const selectedMonster = orderedSelection.find((combatant) => combatant.isPlayer !== true) ?? null;
+		const firstMonster = monsterCombatants[0] ?? null;
+		if (!selectedMonster) {
+			if (!firstMonster) {
+				return;
+			}
+			setSelectedCombatantIds([firstMonster.id]);
+			return;
+		}
+
+		const currentMonsterIndex = monsterCombatants.findIndex((combatant) => combatant.id === selectedMonster.id);
+		const baseIndex = currentMonsterIndex >= 0 ? currentMonsterIndex : 0;
+		const count = monsterCombatants.length;
+		const nextIndex = ((baseIndex + delta) % count + count) % count;
+		const nextCombatant = monsterCombatants[nextIndex];
+		if (!nextCombatant) {
+			return;
+		}
+
+		pendingKeyboardSelectionScrollIdRef.current = nextCombatant.id;
+		setSelectedCombatantIds([nextCombatant.id]);
+	};
+
+	const executeHotkeyAction = (actionId: DashboardHotkeyAction): boolean => {
+		if (!session) {
+			if (actionId === "nextTurn") {
+				return false;
+			}
+		}
+
+		const orderedSelection = getOrderedSelectedCombatants();
+		const primarySelected = orderedSelection[0] ?? null;
+		switch (actionId) {
+			case "nextTurn":
+				if (!canControlTurns) {
+					return false;
+				}
+				actions.onNextTurn();
+				return true;
+			case "moveSelectionUp":
+				moveSelectionBy(-1);
+				return true;
+			case "moveSelectionDown":
+				moveSelectionBy(1);
+				return true;
+			case "setActive": {
+				const target = primarySelected;
+				if (!target) {
+					return false;
+				}
+				actions.onActivateCombatant(target.id);
+				return true;
+			}
+			case "damageHeal": {
+				const monsterSelection = orderedSelection.filter((combatant) => combatant.isPlayer !== true);
+				const fallbackActive = session?.combatants[session.activeIndex] ?? null;
+				const fallbackMonsters = fallbackActive && fallbackActive.isPlayer !== true ? [fallbackActive.id] : [];
+				const targetIds = monsterSelection.map((combatant) => combatant.id);
+				if (targetIds.length === 0 && fallbackMonsters.length === 0) {
+					return false;
+				}
+				actions.onDamageHealCombatants(targetIds.length > 0 ? targetIds : fallbackMonsters);
+				return true;
+			}
+			case "kick": {
+				const playerIds = orderedSelection.filter((combatant) => combatant.isPlayer === true).map((combatant) => combatant.id);
+				if (playerIds.length === 0) {
+					return false;
+				}
+				actions.onKickPlayers(playerIds);
+				return true;
+			}
+			case "remove": {
+				const monsterIds = orderedSelection.filter((combatant) => combatant.isPlayer !== true).map((combatant) => combatant.id);
+				if (monsterIds.length === 0) {
+					return false;
+				}
+				actions.onDeleteCombatants(monsterIds);
+				return true;
+			}
+			case "openMonsterInfo": {
+				const target = primarySelected;
+				if (!target || target.isPlayer === true || target.monster.id.startsWith("unresolved::")) {
+					return false;
+				}
+				actions.onOpenMonster(target.monster);
+				return true;
+			}
+			default:
+				return false;
+		}
+	};
+
+	const handleDashboardKeyDown = (event: KeyboardEvent): void => {
+		if (!model.dashboardHotkeysEnabled) {
+			return;
+		}
+
+		const target = event.target as HTMLElement | null;
+		if (isEditableTarget(target)) {
+			return;
+		}
+
+		const pressed = hotkeyFromKeyboardEvent(event);
+		if (!pressed) {
+			return;
+		}
+
+		const matchedAction = (Object.keys(model.dashboardHotkeys) as DashboardHotkeyAction[]).find((actionId) =>
+			normalizeHotkey(model.dashboardHotkeys[actionId] ?? "") === pressed,
+		);
+		if (!matchedAction) {
+			return;
+		}
+
+		const handled = executeHotkeyAction(matchedAction);
+		if (!handled) {
+			return;
+		}
+		event.preventDefault();
+		event.stopPropagation();
 	};
 
 	const beginCombatantDrag = (combatantId: string): void => {
@@ -358,12 +503,41 @@ export function DashboardPanel({ model, actions }: DashboardPanelProps) {
 			return;
 		}
 
+		if (model.openCurrentMonsterOnNextTurn) {
+			const activeCombatant = session?.combatants.find((combatant) => combatant.id === activeCombatantId) ?? null;
+			if (activeCombatant && activeCombatant.isPlayer !== true) {
+				setSelectedCombatantIds([activeCombatant.id]);
+			}
+		}
+
 		row.scrollIntoView({
 			block: "nearest",
 			inline: "nearest",
 			behavior: "smooth",
 		});
-	}, [activeCombatantId]);
+	}, [activeCombatantId, model.openCurrentMonsterOnNextTurn, session]);
+
+	useEffect(() => {
+		const pendingId = pendingKeyboardSelectionScrollIdRef.current;
+		if (!pendingId) {
+			return;
+		}
+		if (!selectedCombatantIds.includes(pendingId)) {
+			return;
+		}
+
+		const row = combatantRowRefs.current.get(pendingId);
+		if (!row) {
+			return;
+		}
+
+		row.scrollIntoView({
+			block: "nearest",
+			inline: "nearest",
+			behavior: "smooth",
+		});
+		pendingKeyboardSelectionScrollIdRef.current = null;
+	}, [selectedCombatantIds]);
 
 	// Render branch: either active combatants or an empty-state hint.
 	// Toolbar is always shown so encounter controls remain reachable.
@@ -371,6 +545,15 @@ export function DashboardPanel({ model, actions }: DashboardPanelProps) {
 		<div
 			ref={dashboardRootRef}
 			className="encounter-cast-dashboard"
+			tabIndex={0}
+			onMouseDownCapture={(event) => {
+				const target = event.target as HTMLElement | null;
+				if (shouldKeepNativeFocus(target)) {
+					return;
+				}
+				dashboardRootRef.current?.focus();
+			}}
+			onKeyDown={handleDashboardKeyDown}
 			onClick={() => {
 				setSelectedCombatantIds([]);
 			}}
@@ -481,6 +664,20 @@ export function DashboardPanel({ model, actions }: DashboardPanelProps) {
 			</div>
 		</div>
 	);
+}
+
+function shouldKeepNativeFocus(target: HTMLElement | null): boolean {
+	if (!target) {
+		return false;
+	}
+	return Boolean(target.closest("input, textarea, select, button, [contenteditable='true']"));
+}
+
+function isEditableTarget(target: HTMLElement | null): boolean {
+	if (!target) {
+		return false;
+	}
+	return Boolean(target.closest("input, textarea, select, [contenteditable='true']"));
 }
 
 // Initiative badge with crit styling (nat 1 / nat 20).

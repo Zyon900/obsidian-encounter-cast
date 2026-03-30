@@ -1,5 +1,6 @@
 import { PluginSettingTab, Setting, type App } from "obsidian";
 import EncounterCastPlugin from "../../main";
+import { DASHBOARD_HOTKEY_FIELDS, hotkeyFromKeyboardEvent, normalizeHotkey, type DashboardHotkeyAction } from "../dashboard/hotkeys";
 
 export class EncounterCastSettingTab extends PluginSettingTab {
 	constructor(app: App, private readonly plugin: EncounterCastPlugin) {
@@ -140,6 +141,68 @@ export class EncounterCastSettingTab extends PluginSettingTab {
 					});
 				}),
 			);
+
+		new Setting(containerEl).setName("Dashboard hotkeys").setHeading();
+		new Setting(containerEl)
+			.setName("Enable dashboard hotkeys")
+			.setDesc("Enable keyboard shortcuts while the dashboard is focused.")
+			.addToggle((toggle) =>
+				toggle.setValue(settings.dashboardHotkeysEnabled).onChange((value) => {
+					void this.plugin.updateDashboardHotkeysEnabledSetting(value);
+				}),
+			);
+		for (const field of DASHBOARD_HOTKEY_FIELDS) {
+			this.addDashboardHotkeySetting(field.id, field.name, settings.dashboardHotkeys[field.id] ?? "");
+		}
+		new Setting(containerEl)
+			.setName("Open current monster on next turn")
+			.setDesc("Automatically open the active monster statblock whenever next turn is triggered.")
+			.addToggle((toggle) =>
+				toggle.setValue(settings.openCurrentMonsterOnNextTurn).onChange((value) => {
+					void this.plugin.updateOpenCurrentMonsterOnNextTurnSetting(value);
+				}),
+			);
+
+		new Setting(containerEl)
+			.setName("Support encounter cast")
+			.setDesc("If this plugin helps your game, you can support the author!")
+			.addButton((button) =>
+				button
+					.setButtonText("Buy me a coffee")
+					.setCta()
+					.onClick(() => {
+						window.open("https://buymeacoffee.com/zyon900", "_blank", "noopener,noreferrer");
+					}),
+			);
+	}
+
+	private addDashboardHotkeySetting(action: DashboardHotkeyAction, name: string, initialValue: string): void {
+		new Setting(this.containerEl)
+			.setName(name)
+			.setDesc("Click and press a shortcut. Press backspace, delete, or escape to clear.")
+			.addText((text) => {
+				text.setPlaceholder("Unbound");
+				text.setValue(normalizeHotkey(initialValue));
+				text.inputEl.readOnly = true;
+				text.inputEl.addEventListener("focus", () => {
+					text.inputEl.select();
+				});
+				text.inputEl.addEventListener("keydown", (event) => {
+					event.preventDefault();
+					event.stopPropagation();
+					if (event.key === "Backspace" || event.key === "Delete" || event.key === "Escape") {
+						text.setValue("");
+						void this.plugin.updateDashboardHotkeySetting(action, "");
+						return;
+					}
+					const combo = hotkeyFromKeyboardEvent(event);
+					if (!combo) {
+						return;
+					}
+					text.setValue(combo);
+					void this.plugin.updateDashboardHotkeySetting(action, combo);
+				});
+			});
 	}
 
 	private addNumberSetting(options: {

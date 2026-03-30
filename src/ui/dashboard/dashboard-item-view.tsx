@@ -1,6 +1,7 @@
 import { ItemView, WorkspaceLeaf } from "obsidian";
 import { render } from "preact";
 import { DashboardPanel } from "./dashboard-panel";
+import { DEFAULT_DASHBOARD_HOTKEYS } from "./hotkeys";
 import type { DashboardActions, DashboardViewModel } from "./types";
 
 export const DASHBOARD_VIEW_TYPE = "encounter-cast-dm-dashboard";
@@ -14,6 +15,9 @@ const EMPTY_MODEL: DashboardViewModel = {
 	inviteUrls: [],
 	hoverPreviewEnabled: true,
 	hoverPreviewDelayMs: 500,
+	openCurrentMonsterOnNextTurn: false,
+	dashboardHotkeysEnabled: false,
+	dashboardHotkeys: { ...DEFAULT_DASHBOARD_HOTKEYS },
 };
 
 export class DashboardItemView extends ItemView {

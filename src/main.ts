@@ -34,6 +34,7 @@ import { InviteQrModal } from "./ui/dashboard/invite-qr-modal";
 import { EncounterCastSettingTab } from "./ui/settings/plugin-settings-tab";
 import { pickMonsterNameOrCustom, pickMonsterOrCustom } from "./ui/dashboard/add-monster-picker";
 import { DashboardItemView, DASHBOARD_VIEW_TYPE } from "./ui/dashboard/dashboard-item-view";
+import { DEFAULT_DASHBOARD_HOTKEYS, normalizeHotkey, type DashboardHotkeyAction, type DashboardHotkeyBindings } from "./ui/dashboard/hotkeys";
 import type { DashboardViewModel } from "./ui/dashboard/types";
 import { PreactMount } from "./ui/preact-mount";
 import { CleanupRegistry } from "./utils/cleanup-registry";
@@ -41,6 +42,9 @@ import { CleanupRegistry } from "./utils/cleanup-registry";
 export interface EncounterCastSettings extends EncounterPartySettings {
 	rollMonsterHp: boolean;
 	rollAllDiceOnMonsterInfoOpen: boolean;
+	dashboardHotkeysEnabled: boolean;
+	dashboardHotkeys: DashboardHotkeyBindings;
+	openCurrentMonsterOnNextTurn: boolean;
 	hoverPreviewEnabled: boolean;
 	hoverPreviewDelayMs: number;
 	hoverPreviewHideDelayMs: number;
@@ -53,6 +57,9 @@ const DEFAULT_SETTINGS: EncounterCastSettings = {
 	partyLevel: null,
 	rollMonsterHp: false,
 	rollAllDiceOnMonsterInfoOpen: false,
+	dashboardHotkeysEnabled: false,
+	dashboardHotkeys: DEFAULT_DASHBOARD_HOTKEYS,
+	openCurrentMonsterOnNextTurn: false,
 	hoverPreviewEnabled: true,
 	hoverPreviewDelayMs: 500,
 	hoverPreviewHideDelayMs: 500,
@@ -197,6 +204,10 @@ export default class EncounterCastPlugin extends Plugin {
 			callback: async () => {
 				await this.openDashboardView();
 			},
+		});
+		// eslint-disable-next-line obsidianmd/ui/sentence-case
+		this.addRibbonIcon("swords", "Open DM dashboard", () => {
+			void this.openDashboardView();
 		});
 		this.addCommand({
 			id: "open-encounter-party-settings",
@@ -352,6 +363,9 @@ export default class EncounterCastPlugin extends Plugin {
 			inviteUrls: serverState.inviteUrls,
 			hoverPreviewEnabled: this.settings.hoverPreviewEnabled,
 			hoverPreviewDelayMs: this.settings.hoverPreviewDelayMs,
+			openCurrentMonsterOnNextTurn: this.settings.openCurrentMonsterOnNextTurn,
+			dashboardHotkeysEnabled: this.settings.dashboardHotkeysEnabled,
+			dashboardHotkeys: { ...this.settings.dashboardHotkeys },
 		};
 	}
 
@@ -723,7 +737,16 @@ export default class EncounterCastPlugin extends Plugin {
 		if (!this.currentSession || !this.encounterRunning) {
 			return;
 		}
-		this.updateSession(advanceCombatTurn(this.currentSession));
+		const nextSession = advanceCombatTurn(this.currentSession);
+		this.updateSession(nextSession);
+		if (!this.settings.openCurrentMonsterOnNextTurn) {
+			return;
+		}
+		const activeCombatant = nextSession.combatants[nextSession.activeIndex] ?? null;
+		if (!activeCombatant || activeCombatant.isPlayer === true || activeCombatant.monster.id.startsWith("unresolved::")) {
+			return;
+		}
+		void this.openMonsterInfo(activeCombatant.monster, "dashboard");
 	}
 
 	private activateCombatant(combatantId: string): void {
@@ -1145,6 +1168,35 @@ export default class EncounterCastPlugin extends Plugin {
 		await this.saveData(this.settings);
 	}
 
+	async updateDashboardHotkeysEnabledSetting(dashboardHotkeysEnabled: boolean): Promise<void> {
+		this.settings = {
+			...this.settings,
+			dashboardHotkeysEnabled,
+		};
+		await this.saveData(this.settings);
+		this.renderDashboardView();
+	}
+
+	async updateDashboardHotkeySetting(action: DashboardHotkeyAction, binding: string): Promise<void> {
+		this.settings = {
+			...this.settings,
+			dashboardHotkeys: {
+				...this.settings.dashboardHotkeys,
+				[action]: normalizeHotkey(binding),
+			},
+		};
+		await this.saveData(this.settings);
+		this.renderDashboardView();
+	}
+
+	async updateOpenCurrentMonsterOnNextTurnSetting(openCurrentMonsterOnNextTurn: boolean): Promise<void> {
+		this.settings = {
+			...this.settings,
+			openCurrentMonsterOnNextTurn,
+		};
+		await this.saveData(this.settings);
+	}
+
 	async updateHoverPreviewSettings(settings: {
 		hoverPreviewEnabled: boolean;
 		hoverPreviewDelayMs: number;
@@ -1345,6 +1397,15 @@ function mergeSettings(value: unknown): EncounterCastSettings {
 			typeof candidate.rollAllDiceOnMonsterInfoOpen === "boolean"
 				? candidate.rollAllDiceOnMonsterInfoOpen
 				: DEFAULT_SETTINGS.rollAllDiceOnMonsterInfoOpen,
+		dashboardHotkeysEnabled:
+			typeof candidate.dashboardHotkeysEnabled === "boolean"
+				? candidate.dashboardHotkeysEnabled
+				: DEFAULT_SETTINGS.dashboardHotkeysEnabled,
+		dashboardHotkeys: mergeDashboardHotkeys(candidate.dashboardHotkeys),
+		openCurrentMonsterOnNextTurn:
+			typeof candidate.openCurrentMonsterOnNextTurn === "boolean"
+				? candidate.openCurrentMonsterOnNextTurn
+				: DEFAULT_SETTINGS.openCurrentMonsterOnNextTurn,
 		hoverPreviewEnabled:
 			typeof candidate.hoverPreviewEnabled === "boolean"
 				? candidate.hoverPreviewEnabled
@@ -1376,4 +1437,21 @@ function normalizeHoverWidth(value: unknown, fallback: number): number {
 	}
 	const rounded = Math.round(value);
 	return Math.min(1400, Math.max(320, rounded));
+}
+
+function mergeDashboardHotkeys(value: unknown): DashboardHotkeyBindings {
+	if (!value || typeof value !== "object") {
+		return { ...DEFAULT_DASHBOARD_HOTKEYS };
+	}
+
+	const candidate = value as Partial<Record<DashboardHotkeyAction, unknown>>;
+	const merged = { ...DEFAULT_DASHBOARD_HOTKEYS };
+	for (const action of Object.keys(DEFAULT_DASHBOARD_HOTKEYS) as DashboardHotkeyAction[]) {
+		const raw = candidate[action];
+		if (typeof raw !== "string") {
+			continue;
+		}
+		merged[action] = normalizeHotkey(raw);
+	}
+	return merged;
 }

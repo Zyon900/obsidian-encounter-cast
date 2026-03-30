@@ -1,5 +1,6 @@
 import type { CombatSession } from "../../encounter/combat-session";
 import type { MonsterRecord } from "../../monsters/types";
+import type { DashboardHotkeyBindings } from "./hotkeys";
 
 export interface DashboardViewModel {
 	session: CombatSession | null;
@@ -10,6 +11,9 @@ export interface DashboardViewModel {
 	inviteUrls: string[];
 	hoverPreviewEnabled: boolean;
 	hoverPreviewDelayMs: number;
+	openCurrentMonsterOnNextTurn: boolean;
+	dashboardHotkeysEnabled: boolean;
+	dashboardHotkeys: DashboardHotkeyBindings;
 }
 
 export interface DashboardActions {
