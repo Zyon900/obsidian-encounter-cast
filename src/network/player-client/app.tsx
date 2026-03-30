@@ -93,7 +93,7 @@ function PlayerClientApp() {
 	useSheetOutsideClose(ui.sheetMode === "edit", sheetRootRef, () => {
 		dispatch({ type: "SET_SHEET_MODE", value: "none" });
 	});
-	useServerHealthProbe(Boolean(!ui.playerId && !ui.serverShutDown && ui.topView !== "kicked"), () => {
+	useServerHealthProbe(Boolean(!ui.serverShutDown && ui.topView !== "kicked"), token, () => {
 		dispatch({ type: "SERVER_SHUTDOWN", value: "Encounter server has shut down." });
 	});
 	usePlayerLeaveBeacon(token, ui.playerId);
@@ -124,7 +124,23 @@ function PlayerClientApp() {
 			localStorage.removeItem("encounter-cast-player-id");
 			dispatch({ type: "PLAYER_KICKED", value: message || "You were removed from this encounter." });
 		},
-		onDisconnected: refreshState,
+		onDisconnected: async () => {
+			if (!ui.playerId) {
+				dispatch({ type: "SERVER_SHUTDOWN", value: "Encounter server has shut down." });
+				return;
+			}
+			try {
+				const result = await api.refreshState(ui.playerId);
+				if (result.ok && result.state) {
+					const nextState: StateSyncPayload = result.state;
+					dispatch({ type: "SET_STATE_SYNC", value: nextState });
+					return;
+				}
+			} catch {
+				// Fall through to shutdown transition below.
+			}
+			dispatch({ type: "SERVER_SHUTDOWN", value: "Encounter server has shut down." });
+		},
 		onReconnectScheduled: () => {
 			setReconnectNonce((value) => value + 1);
 		},

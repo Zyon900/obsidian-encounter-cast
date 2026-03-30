@@ -1,14 +1,14 @@
 /* eslint-disable no-restricted-globals */
 import { useEffect } from "preact/hooks";
 
-export function useServerHealthProbe(enabled: boolean, onServerShutdown: () => void): void {
+export function useServerHealthProbe(enabled: boolean, token: string, onServerShutdown: () => void): void {
 	useEffect(() => {
 		if (!enabled) {
 			return;
 		}
 		const check = async () => {
 			try {
-				const response = await fetch("/health", { cache: "no-store" });
+				const response = await fetch(`/api/session?token=${encodeURIComponent(token)}`, { cache: "no-store" });
 				if (!response.ok) {
 					throw new Error("Health endpoint unavailable.");
 				}
@@ -19,5 +19,5 @@ export function useServerHealthProbe(enabled: boolean, onServerShutdown: () => v
 		void check();
 		const timer = window.setInterval(() => void check(), 3000);
 		return () => clearInterval(timer);
-	}, [enabled, onServerShutdown]);
+	}, [enabled, onServerShutdown, token]);
 }
