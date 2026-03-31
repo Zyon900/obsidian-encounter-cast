@@ -17,7 +17,7 @@ export interface EncounterParseResult {
 	errors: EncounterParseError[];
 }
 
-const ENCOUNTER_LINE_REGEX = /^\s*(\d+)\s*x\s+(.+?)(?:\s+'([^']+)')?\s*$/;
+const ENCOUNTER_LINE_REGEX = /^\s*(\d+)\s*x\s+(.+?)(?:\s+'([^']*)')?\s*$/;
 
 export function parseEncounterBlock(source: string): EncounterParseResult {
 	const lines = source.split(/\r?\n/);
