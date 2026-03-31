@@ -20,12 +20,21 @@ import { CodeblockRenderChild } from "./encounter/codeblock-render-child";
 import { createCodeblockEditorKeymap } from "./encounter/codeblock-editor-keymap";
 import type { EncounterPartySettings } from "./encounter/codeblock-difficulty";
 import { parseEncounterBlock, summarizeEncounterSource } from "./encounter/codeblock-parser";
-import { resolveEncounterEntries, type ResolveEncounterResult, type ResolvedEncounterEntry } from "./encounter/codeblock-resolver";
+import {
+	replaceEncounterSection,
+	serializeEncounterBody,
+	tryPersistEncounterRowsInActiveEditor,
+} from "./encounter/codeblock-persistence";
+import { createUnresolvedMonsterRecord, prepareEncounterSource } from "./encounter/encounter-preparation";
+import { resolveEncounterEntries, type ResolvedEncounterEntry } from "./encounter/codeblock-resolver";
+import { clearPlayerInitiatives, getPlayerCombatants, preparePlayerCombatantsForCombatStart } from "./encounter/session-state";
 import { CodeblockSuggest } from "./encounter/codeblock-suggest";
 import type { MonsterRecord } from "./monsters/types";
 import { MonsterManager } from "./monsters/monster-manager";
 import { CombatServer } from "./network/combat-server";
-import type { PlayerTheme } from "./network/player-contracts";
+import { captureObsidianTheme, resolveSupportUrlFromManifest } from "./network/player-theme";
+import { applyCombatServerRuntimeState, buildEncounterServerStartSummary } from "./network/server-orchestration";
+import { DEFAULT_SETTINGS, mergeSettings, normalizeHoverDelay, normalizeHoverWidth, type EncounterCastSettings } from "./settings/plugin-settings";
 import type { CodeblockRow } from "./ui/encounter/codeblock-widget";
 import { PartySettingsModal } from "./ui/encounter/party-settings-modal";
 import { CombatantRenameModal } from "./ui/dashboard/combatant-rename-modal";
@@ -33,39 +42,13 @@ import { DamageHealModal } from "./ui/dashboard/damage-heal-modal";
 import { InviteQrModal } from "./ui/dashboard/invite-qr-modal";
 import { EncounterCastSettingTab } from "./ui/settings/plugin-settings-tab";
 import { pickMonsterNameOrCustom, pickMonsterOrCustom } from "./ui/dashboard/add-monster-picker";
+import { applyDamageHealToCombatants, removeCombatantFromSession } from "./ui/dashboard/combatant-actions";
+import { clearMonstersFromSessionState, duplicateSelectedMonsters, parseIntegerInput } from "./ui/dashboard/dashboard-session-state";
 import { DashboardItemView, DASHBOARD_VIEW_TYPE } from "./ui/dashboard/dashboard-item-view";
-import { DEFAULT_DASHBOARD_HOTKEYS, normalizeHotkey, type DashboardHotkeyAction, type DashboardHotkeyBindings } from "./ui/dashboard/hotkeys";
+import { normalizeHotkey, type DashboardHotkeyAction } from "./ui/dashboard/hotkeys";
 import type { DashboardViewModel } from "./ui/dashboard/types";
 import { PreactMount } from "./ui/preact-mount";
 import { CleanupRegistry } from "./utils/cleanup-registry";
-
-export interface EncounterCastSettings extends EncounterPartySettings {
-	rollMonsterHp: boolean;
-	rollAllDiceOnMonsterInfoOpen: boolean;
-	dashboardHotkeysEnabled: boolean;
-	dashboardHotkeys: DashboardHotkeyBindings;
-	openCurrentMonsterOnNextTurn: boolean;
-	hoverPreviewEnabled: boolean;
-	hoverPreviewDelayMs: number;
-	hoverPreviewHideDelayMs: number;
-	hoverPreviewWidthPx: number;
-	hoverPreviewWideColumns: boolean;
-}
-
-const DEFAULT_SETTINGS: EncounterCastSettings = {
-	partyMembers: null,
-	partyLevel: null,
-	rollMonsterHp: false,
-	rollAllDiceOnMonsterInfoOpen: false,
-	dashboardHotkeysEnabled: false,
-	dashboardHotkeys: DEFAULT_DASHBOARD_HOTKEYS,
-	openCurrentMonsterOnNextTurn: false,
-	hoverPreviewEnabled: true,
-	hoverPreviewDelayMs: 500,
-	hoverPreviewHideDelayMs: 500,
-	hoverPreviewWidthPx: 460,
-	hoverPreviewWideColumns: false,
-};
 
 export default class EncounterCastPlugin extends Plugin {
 	private readonly cleanupRegistry = new CleanupRegistry();
@@ -279,10 +262,10 @@ export default class EncounterCastPlugin extends Plugin {
 					void this.persistEncounterRows(ctx, el, nextTitle, nextRows, initialSectionInfo);
 				},
 				onRunEncounter: (nextRows, nextTitle) => {
-					void this.handleEncounterAction(this.serializeEncounterBody(nextTitle, nextRows), "run");
+					void this.handleEncounterAction(serializeEncounterBody(nextTitle, nextRows), "run");
 				},
 				onAddToEncounter: (nextRows, nextTitle) => {
-					void this.handleEncounterAction(this.serializeEncounterBody(nextTitle, nextRows), "add");
+					void this.handleEncounterAction(serializeEncounterBody(nextTitle, nextRows), "add");
 				},
 				onSelectMonsterForCodeblock: async () => pickMonsterNameOrCustom(this.app, this.monsterManager),
 				onDispose: () => {
@@ -379,8 +362,14 @@ export default class EncounterCastPlugin extends Plugin {
 	}
 
 	private async handleEncounterAction(source: string, mode: "run" | "add"): Promise<void> {
-		const prepared = this.prepareEncounter(source);
-		if (!prepared) {
+		const prepared = prepareEncounterSource(source, this.monsterManager);
+		if (!prepared.ok) {
+			for (const error of prepared.errors.slice(0, 4)) {
+				new Notice(`Line ${error.line}: ${error.message}`);
+			}
+			if (prepared.errors.length > 4) {
+				new Notice(`${prepared.errors.length - 4} more encounter parsing errors.`);
+			}
 			return;
 		}
 
@@ -390,7 +379,7 @@ export default class EncounterCastPlugin extends Plugin {
 			: null;
 		const resolveHpForMonster = hpRollTracker ? hpRollTracker.resolve : undefined;
 		if (mode === "run") {
-			const players = this.preparePlayerCombatantsForCombatStart(this.getPlayerCombatants());
+			const players = preparePlayerCombatantsForCombatStart(getPlayerCombatants(this.currentSession));
 			const baseSession: CombatSession = this.currentSession
 				? {
 						...this.currentSession,
@@ -450,14 +439,14 @@ export default class EncounterCastPlugin extends Plugin {
 			return;
 		}
 
-		const updatedBody = this.serializeEncounterBody(title, rows);
+		const updatedBody = serializeEncounterBody(title, rows);
 		const queueTask = async () => {
 			try {
-				const updatedInEditor = this.tryPersistEncounterRowsInActiveEditor(ctx.sourcePath, sectionInfo, updatedBody);
+				const updatedInEditor = tryPersistEncounterRowsInActiveEditor(this.app, ctx.sourcePath, sectionInfo, updatedBody);
 				if (updatedInEditor) {
 					return;
 				}
-				await this.app.vault.process(file, (current) => this.replaceEncounterSection(current, sectionInfo, updatedBody));
+				await this.app.vault.process(file, (current) => replaceEncounterSection(current, sectionInfo, updatedBody));
 			} catch (error) {
 				const message = error instanceof Error ? error.message : "Failed to update encounter block.";
 				new Notice(message);
@@ -468,170 +457,6 @@ export default class EncounterCastPlugin extends Plugin {
 		await this.sourceWriteQueue;
 	}
 
-	private tryPersistEncounterRowsInActiveEditor(
-		sourcePath: string,
-		sectionInfo: MarkdownSectionInformation,
-		encounterBody: string,
-	): boolean {
-		const activeFile = this.app.workspace.getActiveFile();
-		const editor = this.app.workspace.activeEditor?.editor;
-		if (!activeFile || activeFile.path !== sourcePath || !editor) {
-			return false;
-		}
-
-		const documentText = editor.getValue();
-		const lines = documentText.split(/\r?\n/);
-		const fenceLocation = this.findEncounterFenceRange(lines, sectionInfo);
-		if (!fenceLocation) {
-			return false;
-		}
-
-		const newline = documentText.includes("\r\n") ? "\r\n" : "\n";
-		const replacement = encounterBody.length
-			? `${encounterBody.split("\n").join(newline)}${newline}`
-			: "";
-		editor.replaceRange(
-			replacement,
-			{ line: fenceLocation.opening + 1, ch: 0 },
-			{ line: fenceLocation.closing, ch: 0 },
-		);
-		return true;
-	}
-
-	private serializeEncounterBody(title: string | null, rows: CodeblockRow[]): string {
-		const lines: string[] = [];
-		if (title && title.trim().length > 0) {
-			lines.push(title.trim());
-		}
-
-		for (const row of rows) {
-			const sanitizedName = row.customName?.replace(/'/g, "").trim() ?? "";
-			const customNamePart = sanitizedName ? ` '${sanitizedName}'` : "";
-			lines.push(`${row.quantity}x ${row.monsterQuery}${customNamePart}`);
-		}
-
-		return lines.join("\n");
-	}
-
-	private replaceEncounterSection(
-		documentText: string,
-		sectionInfo: MarkdownSectionInformation,
-		encounterBody: string,
-	): string {
-		const newline = documentText.includes("\r\n") ? "\r\n" : "\n";
-		const lines = documentText.split(/\r?\n/);
-		const bodyLines = encounterBody.length ? encounterBody.split("\n") : [];
-		const fenceLocation = this.findEncounterFenceRange(lines, sectionInfo);
-		if (!fenceLocation) {
-			return documentText;
-		}
-
-		lines.splice(fenceLocation.opening + 1, fenceLocation.closing - fenceLocation.opening - 1, ...bodyLines);
-		return lines.join(newline);
-	}
-
-	private findEncounterFenceRange(
-		lines: string[],
-		sectionInfo: MarkdownSectionInformation,
-	): { opening: number; closing: number } | null {
-		const safeStart = Math.max(0, sectionInfo.lineStart);
-		const safeEnd = Math.min(lines.length - 1, Math.max(safeStart, sectionInfo.lineEnd));
-
-		for (let index = safeStart; index >= 0; index--) {
-			const line = lines[index]?.trim() ?? "";
-			if (!line.startsWith("```")) {
-				continue;
-			}
-
-			if (!/^```encounter(?:\s|$)/i.test(line)) {
-				continue;
-			}
-
-			for (let closeIndex = Math.max(index + 1, safeEnd); closeIndex < lines.length; closeIndex++) {
-				const closingLine = lines[closeIndex]?.trim() ?? "";
-				if (closingLine === "```") {
-					return { opening: index, closing: closeIndex };
-				}
-			}
-
-			return null;
-		}
-
-		for (let index = 0; index < lines.length; index++) {
-			const line = lines[index]?.trim() ?? "";
-			if (!/^```encounter(?:\s|$)/i.test(line)) {
-				continue;
-			}
-
-			for (let closeIndex = index + 1; closeIndex < lines.length; closeIndex++) {
-				const closingLine = lines[closeIndex]?.trim() ?? "";
-				if (closingLine === "```") {
-					return { opening: index, closing: closeIndex };
-				}
-			}
-			return null;
-		}
-
-		return null;
-	}
-
-	private prepareEncounter(
-		source: string,
-	): { parseResult: ReturnType<typeof parseEncounterBlock>; resolvedResult: ResolveEncounterResult } | null {
-		const parseResult = parseEncounterBlock(source);
-		if (parseResult.errors.length > 0) {
-			for (const error of parseResult.errors.slice(0, 4)) {
-				new Notice(`Line ${error.line}: ${error.message}`);
-			}
-			if (parseResult.errors.length > 4) {
-				new Notice(`${parseResult.errors.length - 4} more encounter parsing errors.`);
-			}
-			return null;
-		}
-
-		const resolvedResult = resolveEncounterEntries(parseResult.entries, this.monsterManager);
-		if (resolvedResult.unresolved.length > 0) {
-			const fallbackEntries = resolvedResult.unresolved.map((entry) => ({
-				entry,
-				monster: this.createUnresolvedMonsterRecord(entry.monsterQuery),
-			}));
-			return {
-				parseResult,
-				resolvedResult: {
-					resolved: resolvedResult.resolved.concat(fallbackEntries),
-					unresolved: [],
-				},
-			};
-		}
-
-		return { parseResult, resolvedResult };
-	}
-
-	private createUnresolvedMonsterRecord(name: string): MonsterRecord {
-		const safeName = name.trim() || "Unknown creature";
-		const slug = safeName
-			.toLowerCase()
-			.replace(/[^a-z0-9]+/g, "-")
-			.replace(/(^-|-$)/g, "");
-
-		return {
-			id: `unresolved::${slug || "unknown"}`,
-			name: safeName,
-			challenge: null,
-			xp: null,
-			hp: null,
-			max_hp: null,
-			hp_formula: null,
-			ac: null,
-			dex_mod: null,
-			damage_vulnerabilities: [],
-			damage_resistances: [],
-			damage_immunities: [],
-			condition_immunities: [],
-			source: null,
-			slug: slug || "unknown",
-		};
-	}
 
 	private updateSession(session: CombatSession | null): void {
 		this.currentSession = session;
@@ -644,47 +469,13 @@ export default class EncounterCastPlugin extends Plugin {
 		this.renderDashboardView();
 	}
 
-	private getPlayerCombatants(): CombatSession["combatants"] {
-		if (!this.currentSession) {
-			return [];
-		}
-
-		return this.currentSession.combatants.filter((combatant) => combatant.isPlayer === true);
-	}
-
-	private preparePlayerCombatantsForCombatStart(combatants: CombatSession["combatants"]): CombatSession["combatants"] {
-		return combatants.map((combatant) => ({
-			...combatant,
-			initiative: null,
-			initiativeRoll: null,
-			initiativeCriticalFailure: false,
-		}));
-	}
-
-	private clearPlayerInitiatives(session: CombatSession): CombatSession {
-		return {
-			...session,
-			combatants: session.combatants.map((combatant) =>
-				combatant.isPlayer === true
-					? {
-							...combatant,
-							initiative: null,
-							initiativeRoll: null,
-							initiativeCriticalFailure: false,
-						}
-					: combatant,
-			),
-			updatedAt: new Date().toISOString(),
-		};
-	}
-
 	private startEncounterFromDashboard(): void {
 		if (!this.currentSession) {
 			new Notice("No encounter available to run.");
 			return;
 		}
 
-		const withClearedPlayerInitiative = this.clearPlayerInitiatives(this.currentSession);
+		const withClearedPlayerInitiative = clearPlayerInitiatives(this.currentSession);
 		this.currentSession = setActiveToTopCombatant(rollMonsterInitiative(withClearedPlayerInitiative));
 		this.encounterRunning = true;
 		this.updateSession(this.currentSession);
@@ -712,7 +503,7 @@ export default class EncounterCastPlugin extends Plugin {
 				return;
 			}
 
-			void this.addMonsterToSession(selection.monster ?? this.createUnresolvedMonsterRecord(selection.monsterName));
+			void this.addMonsterToSession(selection.monster ?? createUnresolvedMonsterRecord(selection.monsterName));
 		})();
 	}
 
@@ -748,21 +539,9 @@ export default class EncounterCastPlugin extends Plugin {
 			return;
 		}
 
-		const playerCombatants = this.getPlayerCombatants();
-		const activeId = this.currentSession.combatants[this.currentSession.activeIndex]?.id ?? null;
-		const activeIndex = activeId ? playerCombatants.findIndex((combatant) => combatant.id === activeId) : -1;
-
-		if (this.encounterRunning && playerCombatants.length === 0) {
-			this.encounterRunning = false;
-		}
-
-		this.updateSession({
-			...this.currentSession,
-			combatants: playerCombatants,
-			activeIndex: activeIndex >= 0 ? activeIndex : 0,
-			round: playerCombatants.length > 0 ? this.currentSession.round : 1,
-			updatedAt: new Date().toISOString(),
-		});
+		const cleared = clearMonstersFromSessionState(this.currentSession, this.encounterRunning);
+		this.encounterRunning = cleared.encounterRunning;
+		this.updateSession(cleared.session);
 		new Notice(monsterCount === 1 ? "1 monster removed." : `${monsterCount} monsters removed.`);
 	}
 	private advanceTurn(): void {
@@ -830,65 +609,23 @@ export default class EncounterCastPlugin extends Plugin {
 			return;
 		}
 
-		const selectedIds = new Set(combatantIds);
-		let affectedCount = 0;
-		let skippedCount = 0;
-		let changed = false;
+		const result = applyDamageHealToCombatants(this.currentSession, combatantIds, amount);
 
-		const nextCombatants = this.currentSession.combatants.map((combatant) => {
-			if (!selectedIds.has(combatant.id) || combatant.isPlayer === true) {
-				return combatant;
-			}
-			if (combatant.hpCurrent === null || combatant.hpMax === null) {
-				skippedCount += 1;
-				return combatant;
-			}
-
-			const hpMax = Math.max(0, combatant.hpMax);
-			const hpCurrent = Math.max(0, Math.min(combatant.hpCurrent, hpMax));
-			const tempHpCurrent = Math.max(0, combatant.tempHp);
-			let nextHpCurrent = hpCurrent;
-			let nextTempHp = tempHpCurrent;
-			if (amount > 0) {
-				const damageRemainingAfterTemp = Math.max(0, amount - tempHpCurrent);
-				nextTempHp = Math.max(0, tempHpCurrent - amount);
-				nextHpCurrent = Math.max(0, hpCurrent - damageRemainingAfterTemp);
-			} else {
-				nextHpCurrent = Math.min(hpMax, hpCurrent + Math.abs(amount));
-			}
-			affectedCount += 1;
-			if (
-				nextHpCurrent !== combatant.hpCurrent ||
-				nextTempHp !== combatant.tempHp ||
-				hpCurrent !== combatant.hpCurrent ||
-				tempHpCurrent !== combatant.tempHp ||
-				hpMax !== combatant.hpMax
-			) {
-				changed = true;
-			}
-			return {
-				...combatant,
-				hpCurrent: nextHpCurrent,
-				tempHp: nextTempHp,
-				hpMax,
-			};
-		});
-
-		if (changed) {
-			this.updateSession({
-				...this.currentSession,
-				combatants: nextCombatants,
-				updatedAt: new Date().toISOString(),
-			});
+		if (result.changed) {
+			this.updateSession(result.session);
 		}
 
-		if (affectedCount > 0) {
+		if (result.affectedCount > 0) {
 			const action = amount > 0 ? "damage" : "healing";
 			const magnitude = Math.abs(amount);
-			new Notice(`Applied ${magnitude} ${action} to ${affectedCount} monster${affectedCount === 1 ? "" : "s"}.`);
+			new Notice(
+				`Applied ${magnitude} ${action} to ${result.affectedCount} monster${result.affectedCount === 1 ? "" : "s"}.`,
+			);
 		}
-		if (skippedCount > 0) {
-			new Notice(`Skipped ${skippedCount} monster${skippedCount === 1 ? "" : "s"} with missing HP values.`);
+		if (result.skippedCount > 0) {
+			new Notice(
+				`Skipped ${result.skippedCount} monster${result.skippedCount === 1 ? "" : "s"} with missing HP values.`,
+			);
 		}
 	}
 
@@ -943,7 +680,7 @@ export default class EncounterCastPlugin extends Plugin {
 			if (!combatant || combatant.isPlayer === true) {
 				continue;
 			}
-			nextSession = this.removeCombatantFromSession(nextSession, combatantId);
+			nextSession = removeCombatantFromSession(nextSession, combatantId);
 			if (!nextSession) {
 				continue;
 			}
@@ -962,35 +699,12 @@ export default class EncounterCastPlugin extends Plugin {
 			return;
 		}
 
-		const selected = new Set(combatantIds);
-		if (selected.size === 0) {
-			return;
-		}
-
-		let duplicateCount = 0;
-		const nextCombatants: CombatSession["combatants"] = [];
-		for (const combatant of this.currentSession.combatants) {
-			nextCombatants.push(combatant);
-			if (!selected.has(combatant.id) || combatant.isPlayer === true) {
-				continue;
-			}
-
-			duplicateCount += 1;
-			nextCombatants.push({
-				...combatant,
-				id: `combatant-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
-				name: `${combatant.name} copy`,
-			});
-		}
+		const { duplicateCount, session } = duplicateSelectedMonsters(this.currentSession, combatantIds);
 		if (duplicateCount === 0) {
 			return;
 		}
 
-		this.updateSession({
-			...this.currentSession,
-			combatants: nextCombatants,
-			updatedAt: new Date().toISOString(),
-		});
+		this.updateSession(session);
 		new Notice(duplicateCount === 1 ? "1 monster duplicated." : `${duplicateCount} monsters duplicated.`);
 	}
 
@@ -1031,32 +745,11 @@ export default class EncounterCastPlugin extends Plugin {
 		}
 	}
 
-	private removeCombatantFromSession(session: CombatSession, combatantId: string): CombatSession | null {
-		const currentIndex = session.combatants.findIndex((candidate) => candidate.id === combatantId);
-		if (currentIndex === -1) {
-			return null;
-		}
-
-		const nextCombatants = session.combatants.filter((candidate) => candidate.id !== combatantId);
-		const nextActiveIndex = nextCombatants.length === 0
-			? 0
-			: session.activeIndex > currentIndex
-				? session.activeIndex - 1
-				: Math.min(session.activeIndex, nextCombatants.length - 1);
-		return {
-			...session,
-			combatants: nextCombatants,
-			activeIndex: nextActiveIndex,
-			round: nextCombatants.length > 0 ? session.round : 1,
-			updatedAt: new Date().toISOString(),
-		};
-	}
-
 	private updateCombatantHp(combatantId: string, value: string): void {
 		if (!this.currentSession) {
 			return;
 		}
-		const parsed = this.parseNumberInput(value);
+		const parsed = parseIntegerInput(value);
 		if (parsed === undefined) {
 			return;
 		}
@@ -1067,7 +760,7 @@ export default class EncounterCastPlugin extends Plugin {
 		if (!this.currentSession) {
 			return;
 		}
-		const parsed = this.parseNumberInput(value);
+		const parsed = parseIntegerInput(value);
 		if (parsed === undefined) {
 			return;
 		}
@@ -1078,7 +771,7 @@ export default class EncounterCastPlugin extends Plugin {
 		if (!this.currentSession) {
 			return;
 		}
-		const parsed = this.parseNumberInput(value);
+		const parsed = parseIntegerInput(value);
 		if (parsed === undefined) {
 			return;
 		}
@@ -1089,7 +782,7 @@ export default class EncounterCastPlugin extends Plugin {
 		if (!this.currentSession) {
 			return;
 		}
-		const parsed = this.parseNumberInput(value);
+		const parsed = parseIntegerInput(value);
 		if (parsed === undefined) {
 			return;
 		}
@@ -1100,22 +793,12 @@ export default class EncounterCastPlugin extends Plugin {
 		if (!this.currentSession) {
 			return;
 		}
-		const parsed = this.parseNumberInput(value);
+		const parsed = parseIntegerInput(value);
 		if (parsed === undefined) {
 			return;
 		}
 
 		this.updateSession(setCombatantDexMod(this.currentSession, combatantId, parsed));
-	}
-
-	private parseNumberInput(value: string): number | null | undefined {
-		const trimmed = value.trim();
-		if (!trimmed.length) {
-			return null;
-		}
-
-		const parsed = Number.parseInt(trimmed, 10);
-		return Number.isFinite(parsed) ? parsed : undefined;
 	}
 
 	private async openDashboardView(): Promise<void> {
@@ -1132,17 +815,15 @@ export default class EncounterCastPlugin extends Plugin {
 	private async startEncounterServer(): Promise<void> {
 		try {
 			const state = await this.encounterServer.start();
-			this.encounterServer.setTheme(this.captureTheme());
-			this.encounterServer.setSupportUrl(this.resolveSupportUrlFromManifest());
-			this.encounterServer.setEncounterRunning(this.encounterRunning);
-			this.encounterServer.setSession(this.currentSession);
+			applyCombatServerRuntimeState(this.encounterServer, {
+				theme: captureObsidianTheme(),
+				supportUrl: resolveSupportUrlFromManifest(this.manifest),
+				encounterRunning: this.encounterRunning,
+				session: this.currentSession,
+			});
 			this.renderFoundationView();
 			this.renderDashboardView();
-			const invite = state.inviteUrls[0];
-			const summary = invite
-				? `Encounter server started on port ${state.port ?? "?"}. ${invite}`
-				: `Encounter server started on port ${state.port ?? "?"}.`;
-			new Notice(summary);
+			new Notice(buildEncounterServerStartSummary(state));
 		} catch (error) {
 			const message = error instanceof Error ? error.message : "Failed to start encounter server.";
 			new Notice(message);
@@ -1359,131 +1040,4 @@ export default class EncounterCastPlugin extends Plugin {
 			},
 		};
 	}
-
-
-	private captureTheme(): PlayerTheme | null {
-		if (typeof document === "undefined") {
-			return null;
-		}
-
-		const rootStyles = window.getComputedStyle(document.documentElement);
-		const bodyStyles = document.body ? window.getComputedStyle(document.body) : null;
-		const read = (name: string) => {
-			const bodyValue = bodyStyles?.getPropertyValue(name).trim() ?? "";
-			if (bodyValue.length) {
-				return bodyValue;
-			}
-			const rootValue = rootStyles.getPropertyValue(name).trim();
-			return rootValue;
-		};
-
-		return {
-			backgroundPrimary: read("--background-primary"),
-			backgroundSecondary: read("--background-secondary"),
-			textNormal: read("--text-normal"),
-			textMuted: read("--text-muted"),
-			textError: read("--text-error"),
-			textSuccess: read("--text-success"),
-			textWarning: read("--text-warning"),
-			textFaint: read("--text-faint"),
-			interactiveAccent: read("--interactive-accent"),
-			textOnAccent: read("--text-on-accent"),
-			border: read("--background-modifier-border"),
-		};
-	}
-
-	private resolveSupportUrlFromManifest(): string | null {
-		const candidateFunding = (this.manifest as { fundingUrl?: unknown }).fundingUrl;
-		if (typeof candidateFunding === "string" && candidateFunding.trim().length > 0) {
-			return candidateFunding.trim();
-		}
-		if (candidateFunding && typeof candidateFunding === "object") {
-			const values = Object.values(candidateFunding as Record<string, unknown>);
-			for (const value of values) {
-				if (typeof value === "string" && value.trim().length > 0) {
-					return value.trim();
-				}
-			}
-		}
-
-		const candidateAuthorUrl = (this.manifest as { authorUrl?: unknown }).authorUrl;
-		if (typeof candidateAuthorUrl === "string" && candidateAuthorUrl.trim().length > 0) {
-			return candidateAuthorUrl.trim();
-		}
-
-		return null;
-	}
-}
-
-function mergeSettings(value: unknown): EncounterCastSettings {
-	if (!value || typeof value !== "object") {
-		return { ...DEFAULT_SETTINGS };
-	}
-
-	const candidate = value as Partial<EncounterCastSettings>;
-	return {
-		partyMembers: Number.isInteger(candidate.partyMembers) ? candidate.partyMembers ?? null : null,
-		partyLevel: Number.isInteger(candidate.partyLevel) ? candidate.partyLevel ?? null : null,
-		rollMonsterHp: typeof candidate.rollMonsterHp === "boolean" ? candidate.rollMonsterHp : DEFAULT_SETTINGS.rollMonsterHp,
-		rollAllDiceOnMonsterInfoOpen:
-			typeof candidate.rollAllDiceOnMonsterInfoOpen === "boolean"
-				? candidate.rollAllDiceOnMonsterInfoOpen
-				: DEFAULT_SETTINGS.rollAllDiceOnMonsterInfoOpen,
-		dashboardHotkeysEnabled:
-			typeof candidate.dashboardHotkeysEnabled === "boolean"
-				? candidate.dashboardHotkeysEnabled
-				: DEFAULT_SETTINGS.dashboardHotkeysEnabled,
-		dashboardHotkeys: mergeDashboardHotkeys(candidate.dashboardHotkeys),
-		openCurrentMonsterOnNextTurn:
-			typeof candidate.openCurrentMonsterOnNextTurn === "boolean"
-				? candidate.openCurrentMonsterOnNextTurn
-				: DEFAULT_SETTINGS.openCurrentMonsterOnNextTurn,
-		hoverPreviewEnabled:
-			typeof candidate.hoverPreviewEnabled === "boolean"
-				? candidate.hoverPreviewEnabled
-				: DEFAULT_SETTINGS.hoverPreviewEnabled,
-		hoverPreviewDelayMs: normalizeHoverDelay(candidate.hoverPreviewDelayMs, DEFAULT_SETTINGS.hoverPreviewDelayMs),
-		hoverPreviewHideDelayMs: normalizeHoverDelay(
-			candidate.hoverPreviewHideDelayMs,
-			DEFAULT_SETTINGS.hoverPreviewHideDelayMs,
-		),
-		hoverPreviewWidthPx: normalizeHoverWidth(candidate.hoverPreviewWidthPx, DEFAULT_SETTINGS.hoverPreviewWidthPx),
-		hoverPreviewWideColumns:
-			typeof candidate.hoverPreviewWideColumns === "boolean"
-				? candidate.hoverPreviewWideColumns
-				: DEFAULT_SETTINGS.hoverPreviewWideColumns,
-	};
-}
-
-function normalizeHoverDelay(value: unknown, fallback: number): number {
-	if (typeof value !== "number" || !Number.isFinite(value)) {
-		return fallback;
-	}
-	const rounded = Math.round(value);
-	return Math.min(3000, Math.max(0, rounded));
-}
-
-function normalizeHoverWidth(value: unknown, fallback: number): number {
-	if (typeof value !== "number" || !Number.isFinite(value)) {
-		return fallback;
-	}
-	const rounded = Math.round(value);
-	return Math.min(1400, Math.max(320, rounded));
-}
-
-function mergeDashboardHotkeys(value: unknown): DashboardHotkeyBindings {
-	if (!value || typeof value !== "object") {
-		return { ...DEFAULT_DASHBOARD_HOTKEYS };
-	}
-
-	const candidate = value as Partial<Record<DashboardHotkeyAction, unknown>>;
-	const merged = { ...DEFAULT_DASHBOARD_HOTKEYS };
-	for (const action of Object.keys(DEFAULT_DASHBOARD_HOTKEYS) as DashboardHotkeyAction[]) {
-		const raw = candidate[action];
-		if (typeof raw !== "string") {
-			continue;
-		}
-		merged[action] = normalizeHotkey(raw);
-	}
-	return merged;
 }
