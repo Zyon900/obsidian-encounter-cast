@@ -149,6 +149,19 @@ export class FantasyStatblocksAdapter {
 		this.applyHoverContainerLayout();
 	}
 
+	dispose(): void {
+		this.clearHoverHideTimeout();
+		this.hoverComponent?.unload();
+		this.hoverComponent = null;
+		this.hoverAnchorEl = null;
+		this.hoverResizeObserver?.disconnect();
+		this.hoverResizeObserver = null;
+		if (this.hoverContainer) {
+			this.hoverContainer.remove();
+			this.hoverContainer = null;
+		}
+	}
+
 	private requirePlugin(): FantasyStatblocksPlugin {
 		const plugin = this.host.plugins.getPlugin(FANTASY_STATBLOCKS_PLUGIN_ID) as FantasyStatblocksPlugin | null;
 		if (!plugin) {

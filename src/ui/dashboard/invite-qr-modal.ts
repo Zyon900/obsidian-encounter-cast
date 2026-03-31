@@ -27,12 +27,13 @@ export class InviteQrModal extends Modal {
 		link.target = "_blank";
 		link.rel = "noopener noreferrer";
 
-		void QRCode.toString(this.url, {
-			type: "svg",
-			margin: 1,
-			width: 240,
-		}).then(
-			(markup) => {
+		void (async () => {
+			try {
+				const markup = await QRCode.toString(this.url, {
+					type: "svg",
+					margin: 1,
+					width: 240,
+				});
 				if (this.closed) {
 					return;
 				}
@@ -43,14 +44,13 @@ export class InviteQrModal extends Modal {
 					frame.appendChild(svgEl);
 				}
 				status.remove();
-			},
-			() => {
+			} catch {
 				if (this.closed) {
 					return;
 				}
 				status.setText("Invite code unavailable.");
-			},
-		);
+			}
+		})();
 
 	}
 

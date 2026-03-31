@@ -13,6 +13,33 @@ export class EncounterCastSettingTab extends PluginSettingTab {
 
 		const settings = this.plugin.getSettingsSnapshot();
 
+		new Setting(containerEl)
+			.setName("Roll monster hp on add")
+			.setDesc("Roll monster max hp from fantasy statblocks using dice roller instead of average hp.")
+			.addToggle((toggle) =>
+				toggle.setValue(settings.rollMonsterHp).onChange((value) => {
+					void this.plugin.updateRollMonsterHpSetting(value);
+				}),
+			);
+
+		new Setting(containerEl)
+			.setName("Roll all dice on monster info open")
+			.setDesc("When opening monster info from the dashboard, select all rendered statblock dice in the creature pane.")
+			.addToggle((toggle) =>
+				toggle.setValue(settings.rollAllDiceOnMonsterInfoOpen).onChange((value) => {
+					void this.plugin.updateRollAllDiceOnMonsterInfoOpenSetting(value);
+				}),
+			);
+
+		new Setting(containerEl)
+			.setName("Open current monster on next turn")
+			.setDesc("Automatically open the active monster statblock whenever next turn is triggered.")
+			.addToggle((toggle) =>
+				toggle.setValue(settings.openCurrentMonsterOnNextTurn).onChange((value) => {
+					void this.plugin.updateOpenCurrentMonsterOnNextTurnSetting(value);
+				}),
+			);
+
 		new Setting(containerEl).setName("Encounter difficulty").setHeading();
 		this.addNumberSetting({
 			name: "Party members",
@@ -45,24 +72,6 @@ export class EncounterCastSettingTab extends PluginSettingTab {
 				});
 			},
 		});
-
-		new Setting(containerEl)
-			.setName("Roll monster hp on add")
-			.setDesc("Roll monster max hp from fantasy statblocks using dice roller instead of average hp.")
-			.addToggle((toggle) =>
-				toggle.setValue(settings.rollMonsterHp).onChange((value) => {
-					void this.plugin.updateRollMonsterHpSetting(value);
-				}),
-			);
-
-		new Setting(containerEl)
-			.setName("Roll all dice on monster info open")
-			.setDesc("When opening monster info from the dashboard, click all rendered statblock dice in the creature pane.")
-			.addToggle((toggle) =>
-				toggle.setValue(settings.rollAllDiceOnMonsterInfoOpen).onChange((value) => {
-					void this.plugin.updateRollAllDiceOnMonsterInfoOpenSetting(value);
-				}),
-			);
 
 		new Setting(containerEl).setName("Monster hover preview").setHeading();
 		new Setting(containerEl)
@@ -142,9 +151,9 @@ export class EncounterCastSettingTab extends PluginSettingTab {
 				}),
 			);
 
-		new Setting(containerEl).setName("Dashboard hotkeys").setHeading();
+		new Setting(containerEl).setName("Dashboard keyboard shortcuts").setHeading();
 		new Setting(containerEl)
-			.setName("Enable dashboard hotkeys")
+			.setName("Enable dashboard keyboard shortcuts")
 			.setDesc("Enable keyboard shortcuts while the dashboard is focused.")
 			.addToggle((toggle) =>
 				toggle.setValue(settings.dashboardHotkeysEnabled).onChange((value) => {
@@ -154,17 +163,10 @@ export class EncounterCastSettingTab extends PluginSettingTab {
 		for (const field of DASHBOARD_HOTKEY_FIELDS) {
 			this.addDashboardHotkeySetting(field.id, field.name, settings.dashboardHotkeys[field.id] ?? "");
 		}
-		new Setting(containerEl)
-			.setName("Open current monster on next turn")
-			.setDesc("Automatically open the active monster statblock whenever next turn is triggered.")
-			.addToggle((toggle) =>
-				toggle.setValue(settings.openCurrentMonsterOnNextTurn).onChange((value) => {
-					void this.plugin.updateOpenCurrentMonsterOnNextTurnSetting(value);
-				}),
-			);
 
 		new Setting(containerEl)
-			.setName("Support encounter cast")
+			// eslint-disable-next-line obsidianmd/ui/sentence-case -- Intentional title-style branding requested by plugin author.
+			.setName("Support Encounter Cast")
 			.setDesc("If this plugin helps your game, you can support the author!")
 			.addButton((button) =>
 				button
@@ -179,7 +181,7 @@ export class EncounterCastSettingTab extends PluginSettingTab {
 	private addDashboardHotkeySetting(action: DashboardHotkeyAction, name: string, initialValue: string): void {
 		new Setting(this.containerEl)
 			.setName(name)
-			.setDesc("Click and press a shortcut. Press backspace, delete, or escape to clear.")
+			.setDesc("Select and press a keyboard shortcut. Press backspace, delete, or escape to clear.")
 			.addText((text) => {
 				text.setPlaceholder("Unbound");
 				text.setValue(normalizeHotkey(initialValue));
@@ -221,18 +223,19 @@ export class EncounterCastSettingTab extends PluginSettingTab {
 				text.setPlaceholder(options.placeholder);
 				text.setValue(options.initialValue === null ? "" : String(options.initialValue));
 
-				const commit = () => {
+				const commit = async () => {
 					const raw = text.getValue().trim();
 					const parsed = raw.length === 0 ? null : Number.parseInt(raw, 10);
 					const nextValue = parsed === null || !Number.isFinite(parsed)
 						? null
 						: Math.min(options.max, Math.max(options.min, parsed));
-					void options.onSave(nextValue).then(() => {
-						text.setValue(nextValue === null ? "" : String(nextValue));
-					});
+					await options.onSave(nextValue);
+					text.setValue(nextValue === null ? "" : String(nextValue));
 				};
 
-				text.inputEl.addEventListener("blur", commit);
+				text.inputEl.addEventListener("blur", () => {
+					void commit();
+				});
 				text.inputEl.addEventListener("keydown", (event) => {
 					if (event.key !== "Enter") {
 						return;

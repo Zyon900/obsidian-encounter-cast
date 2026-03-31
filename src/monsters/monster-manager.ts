@@ -158,6 +158,10 @@ export class MonsterManager {
 		this.adapter.setHoverPreviewLayout(widthPx, wideColumns);
 	}
 
+	dispose(): void {
+		this.adapter.dispose();
+	}
+
 	private loadCacheIfNeeded(): void {
 		if (this.cacheLoaded) {
 			return;

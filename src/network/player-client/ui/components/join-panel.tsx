@@ -34,7 +34,7 @@ export function JoinPanel({ values, actions }: JoinPanelProps) {
 				<label>Temp HP<input id="joinTempHpInput" type="number" placeholder="Optional" value={values.joinTempHp} onInput={(event) => actions.onJoinTempHpChange(event.currentTarget.value)} /></label>
 			</div>
 			<div className="row"><button id="joinBtn" type="button" onClick={actions.onJoin}>Join</button></div>
-			<div className="row"><button id="showQrBtn" className="secondary-btn" type="button" onClick={actions.onShowQr}>Show QR-Code</button></div>
+			<div className="row"><button id="showQrBtn" className="secondary-btn" type="button" onClick={actions.onShowQr}>Show QR code</button></div>
 			<div id="joinMsg">{values.joinMessage}</div>
 		</div>
 	);

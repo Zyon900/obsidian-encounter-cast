@@ -205,7 +205,7 @@ export default class EncounterCastPlugin extends Plugin {
 				await this.openDashboardView();
 			},
 		});
-		// eslint-disable-next-line obsidianmd/ui/sentence-case
+		// eslint-disable-next-line obsidianmd/ui/sentence-case -- Intentional acronym casing requested by plugin author.
 		this.addRibbonIcon("swords", "Open DM dashboard", () => {
 			void this.openDashboardView();
 		});
@@ -300,10 +300,7 @@ export default class EncounterCastPlugin extends Plugin {
 		const refreshOnResize = () => {
 			this.cleanupRegistry.debounce("status-refresh", 120, () => this.renderFoundationView());
 		};
-		window.addEventListener("resize", refreshOnResize);
-		this.cleanupRegistry.add(() => {
-			window.removeEventListener("resize", refreshOnResize);
-		});
+		this.registerDomEvent(window, "resize", refreshOnResize);
 	}
 
 	private resolvePluginAssetRootDir(): string {
@@ -323,7 +320,7 @@ export default class EncounterCastPlugin extends Plugin {
 	onunload(): void {
 		void this.encounterServer.stop();
 		this.encounterWidgetComponents.clear();
-		this.monsterManager.hideCreatureHoverPreview();
+		this.monsterManager.dispose();
 		this.preactMount?.unmount();
 		this.preactMount = null;
 		this.statusBarRoot = null;
@@ -456,6 +453,10 @@ export default class EncounterCastPlugin extends Plugin {
 		const updatedBody = this.serializeEncounterBody(title, rows);
 		const queueTask = async () => {
 			try {
+				const updatedInEditor = this.tryPersistEncounterRowsInActiveEditor(ctx.sourcePath, sectionInfo, updatedBody);
+				if (updatedInEditor) {
+					return;
+				}
 				await this.app.vault.process(file, (current) => this.replaceEncounterSection(current, sectionInfo, updatedBody));
 			} catch (error) {
 				const message = error instanceof Error ? error.message : "Failed to update encounter block.";
@@ -465,6 +466,36 @@ export default class EncounterCastPlugin extends Plugin {
 
 		this.sourceWriteQueue = this.sourceWriteQueue.then(queueTask, queueTask);
 		await this.sourceWriteQueue;
+	}
+
+	private tryPersistEncounterRowsInActiveEditor(
+		sourcePath: string,
+		sectionInfo: MarkdownSectionInformation,
+		encounterBody: string,
+	): boolean {
+		const activeFile = this.app.workspace.getActiveFile();
+		const editor = this.app.workspace.activeEditor?.editor;
+		if (!activeFile || activeFile.path !== sourcePath || !editor) {
+			return false;
+		}
+
+		const documentText = editor.getValue();
+		const lines = documentText.split(/\r?\n/);
+		const fenceLocation = this.findEncounterFenceRange(lines, sectionInfo);
+		if (!fenceLocation) {
+			return false;
+		}
+
+		const newline = documentText.includes("\r\n") ? "\r\n" : "\n";
+		const replacement = encounterBody.length
+			? `${encounterBody.split("\n").join(newline)}${newline}`
+			: "";
+		editor.replaceRange(
+			replacement,
+			{ line: fenceLocation.opening + 1, ch: 0 },
+			{ line: fenceLocation.closing, ch: 0 },
+		);
+		return true;
 	}
 
 	private serializeEncounterBody(title: string | null, rows: CodeblockRow[]): string {
@@ -675,13 +706,14 @@ export default class EncounterCastPlugin extends Plugin {
 	}
 
 	private openAddMonsterModal(): void {
-		void pickMonsterOrCustom(this.app, this.monsterManager).then((selection) => {
+		void (async () => {
+			const selection = await pickMonsterOrCustom(this.app, this.monsterManager);
 			if (!selection) {
 				return;
 			}
 
 			void this.addMonsterToSession(selection.monster ?? this.createUnresolvedMonsterRecord(selection.monsterName));
-		});
+		})();
 	}
 
 	private async addMonsterToSession(monster: MonsterRecord): Promise<void> {
@@ -1336,27 +1368,27 @@ export default class EncounterCastPlugin extends Plugin {
 
 		const rootStyles = window.getComputedStyle(document.documentElement);
 		const bodyStyles = document.body ? window.getComputedStyle(document.body) : null;
-		const read = (name: string, fallback: string) => {
+		const read = (name: string) => {
 			const bodyValue = bodyStyles?.getPropertyValue(name).trim() ?? "";
 			if (bodyValue.length) {
 				return bodyValue;
 			}
 			const rootValue = rootStyles.getPropertyValue(name).trim();
-			return rootValue.length ? rootValue : fallback;
+			return rootValue;
 		};
 
 		return {
-			backgroundPrimary: read("--background-primary", "#1f1f1f"),
-			backgroundSecondary: read("--background-secondary", "#2a2a2a"),
-			textNormal: read("--text-normal", "#e8e8e8"),
-			textMuted: read("--text-muted", "#aaaaaa"),
-			textError: read("--text-error", "#e05a5a"),
-			textSuccess: read("--text-success", read("--color-green", "#3bb273")),
-			textWarning: read("--text-warning", read("--color-yellow", "#d8a106")),
-			textFaint: read("--text-faint", read("--text-muted", "#7e8791")),
-			interactiveAccent: read("--interactive-accent", "#5ea6ff"),
-			textOnAccent: read("--text-on-accent", "#ffffff"),
-			border: read("--background-modifier-border", "#3a3a3a"),
+			backgroundPrimary: read("--background-primary"),
+			backgroundSecondary: read("--background-secondary"),
+			textNormal: read("--text-normal"),
+			textMuted: read("--text-muted"),
+			textError: read("--text-error"),
+			textSuccess: read("--text-success"),
+			textWarning: read("--text-warning"),
+			textFaint: read("--text-faint"),
+			interactiveAccent: read("--interactive-accent"),
+			textOnAccent: read("--text-on-accent"),
+			border: read("--background-modifier-border"),
 		};
 	}
 

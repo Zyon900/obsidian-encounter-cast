@@ -153,36 +153,38 @@ export function usePlayerActions(options: UsePlayerActionsOptions): PlayerAction
 		await refreshState();
 	}, [api, dispatch, refreshState, self, ui.deathDraftFailures, ui.deathDraftSuccesses, ui.playerId]);
 
-	const onSubmitInitiative = useCallback((initiativeTotal: number) => {
+	const onSubmitInitiative = useCallback(async (initiativeTotal: number) => {
 		if (!ui.playerId) {
 			return;
 		}
-		void api.submitInitiative({ playerId: ui.playerId, initiativeTotal, rollType: ui.initiativeRollType }).then(refreshState);
+		await api.submitInitiative({ playerId: ui.playerId, initiativeTotal, rollType: ui.initiativeRollType });
+		await refreshState();
 	}, [api, refreshState, ui.initiativeRollType, ui.playerId]);
 
-	const onConfirmDeath = useCallback(() => {
+	const onConfirmDeath = useCallback(async () => {
 		if (!ui.playerId) {
 			return;
 		}
-		void api.updateDeathSaves({ playerId: ui.playerId, confirm: "dead" })
-			.then(refreshState)
-			.then(() => dispatch({ type: "SET_SHEET_MODE", value: "none" }));
+		await api.updateDeathSaves({ playerId: ui.playerId, confirm: "dead" });
+		await refreshState();
+		dispatch({ type: "SET_SHEET_MODE", value: "none" });
 	}, [api, dispatch, refreshState, ui.playerId]);
 
-	const onConfirmSaved = useCallback(() => {
+	const onConfirmSaved = useCallback(async () => {
 		if (!ui.playerId) {
 			return;
 		}
-		void api.updateDeathSaves({ playerId: ui.playerId, confirm: "saved" })
-			.then(refreshState)
-			.then(() => dispatch({ type: "SET_SHEET_MODE", value: "none" }));
+		await api.updateDeathSaves({ playerId: ui.playerId, confirm: "saved" });
+		await refreshState();
+		dispatch({ type: "SET_SHEET_MODE", value: "none" });
 	}, [api, dispatch, refreshState, ui.playerId]);
 
-	const onEndRound = useCallback(() => {
+	const onEndRound = useCallback(async () => {
 		if (!ui.playerId) {
 			return;
 		}
-		void api.endTurn({ playerId: ui.playerId }).then(refreshState);
+		await api.endTurn({ playerId: ui.playerId });
+		await refreshState();
 	}, [api, refreshState, ui.playerId]);
 
 	return {
@@ -190,9 +192,17 @@ export function usePlayerActions(options: UsePlayerActionsOptions): PlayerAction
 		onSaveStats,
 		onApplyDamage,
 		onDeathSaveClick,
-		onSubmitInitiative,
-		onConfirmDeath,
-		onConfirmSaved,
-		onEndRound,
+		onSubmitInitiative: (initiativeTotal: number) => {
+			void onSubmitInitiative(initiativeTotal);
+		},
+		onConfirmDeath: () => {
+			void onConfirmDeath();
+		},
+		onConfirmSaved: () => {
+			void onConfirmSaved();
+		},
+		onEndRound: () => {
+			void onEndRound();
+		},
 	};
 }
