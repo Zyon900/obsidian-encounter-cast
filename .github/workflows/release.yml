@@ -41,7 +41,6 @@ jobs:
           test -f manifest.json
           test -f main.js
           test -f styles.css
-          test -f player-client.js
 
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
@@ -50,4 +49,3 @@ jobs:
             manifest.json
             main.js
             styles.css
-            player-client.js

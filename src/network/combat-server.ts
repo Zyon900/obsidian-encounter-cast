@@ -1,7 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { readFile } from "node:fs/promises";
 import { createServer, type IncomingMessage, type Server as HttpServer, type ServerResponse } from "node:http";
-import { join } from "node:path";
 import { createCombatSession, upsertPlayerCombatant, type CombatSession } from "../encounter/combat-session";
 import type {
 	EndTurnPayload,
@@ -41,6 +39,7 @@ import { PlayerSseManager } from "./server/sse-manager";
 import { renderInviteQrSvg } from "./server/player/invite-qr";
 import { buildPlayerViewState } from "./server/player/player-view-state";
 import { renderPlayerPageHtml } from "./server/player/render-player-page";
+import { PLAYER_CLIENT_SCRIPT } from "./player-client/player-client-embedded";
 
 export interface CombatServerState {
 	running: boolean;
@@ -61,8 +60,6 @@ export class CombatServer {
 	private encounterRunning = false;
 	private theme: PlayerTheme | null = null;
 	private supportUrl: string | null = null;
-	private playerClientScript: string | null = null;
-	private assetRootDir = ".";
 	private readonly players = new Map<PlayerId, PlayerPresenceState>();
 	private readonly sse = new PlayerSseManager();
 	private onSessionChange: ((session: CombatSession | null) => void) | null = null;
@@ -157,8 +154,7 @@ export class CombatServer {
 	}
 
 	setAssetRootDir(dir: string): void {
-		this.assetRootDir = dir;
-		this.playerClientScript = null;
+		void dir;
 	}
 
 	setOnSessionChange(callback: ((session: CombatSession | null) => void) | null): void {
@@ -206,8 +202,7 @@ export class CombatServer {
 				return;
 			}
 			if (pathname === "/player-client.js" && method === "GET") {
-				const script = await this.loadPlayerClientScript();
-				sendJavascript(res, 200, script);
+				sendJavascript(res, 200, PLAYER_CLIENT_SCRIPT);
 				return;
 			}
 
@@ -403,15 +398,5 @@ export class CombatServer {
 
 	private emitStateSyncToAllPlayers(): void {
 		this.sse.broadcastState((playerId) => this.buildStateSync(playerId));
-	}
-
-	private async loadPlayerClientScript(): Promise<string> {
-		if (this.playerClientScript !== null) {
-			return this.playerClientScript;
-		}
-
-		const scriptPath = join(this.assetRootDir, "player-client.js");
-		this.playerClientScript = await readFile(scriptPath, "utf8");
-		return this.playerClientScript;
 	}
 }
