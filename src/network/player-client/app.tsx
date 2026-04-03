@@ -103,6 +103,7 @@ function PlayerClientApp() {
 		setSheetHp: sheetForm.setSheetHp,
 		setSheetHpMax: sheetForm.setSheetHpMax,
 		setSheetTempHp: sheetForm.setSheetTempHp,
+		sheetMode: ui.sheetMode,
 		dispatch,
 	});
 	useCloseDeathSheetWhenRecovered(isDowned, ui.sheetMode, dispatch);

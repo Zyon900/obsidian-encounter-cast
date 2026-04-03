@@ -2,6 +2,7 @@ import { useEffect } from "preact/hooks";
 import type { Dispatch } from "preact/hooks";
 import type { PlayerUiAction } from "../player-state";
 import type { PlayerFacingState } from "../../player-contracts";
+import type { SheetMode } from "../player-types";
 
 type SelfCombatant = PlayerFacingState["combatants"][number] | null;
 
@@ -11,12 +12,17 @@ interface UseSyncSheetFromSelfOptions {
 	setSheetHp: (value: string) => void;
 	setSheetHpMax: (value: string) => void;
 	setSheetTempHp: (value: string) => void;
+	sheetMode: SheetMode;
 	dispatch: Dispatch<PlayerUiAction>;
 }
 
 export function useSyncSheetFromSelf(options: UseSyncSheetFromSelfOptions): void {
-	const { self, setSheetAc, setSheetHp, setSheetHpMax, setSheetTempHp, dispatch } = options;
+	const { self, setSheetAc, setSheetHp, setSheetHpMax, setSheetTempHp, sheetMode, dispatch } = options;
 	useEffect(() => {
+		// Preserve local draft values while the user is editing stats.
+		if (sheetMode === "edit") {
+			return;
+		}
 		if (!self) {
 			setSheetAc("");
 			setSheetHp("");
@@ -34,5 +40,5 @@ export function useSyncSheetFromSelf(options: UseSyncSheetFromSelfOptions): void
 			failures: Math.max(0, Math.min(3, Math.trunc(self.deathSaveFailures ?? 0))),
 			successes: Math.max(0, Math.min(3, Math.trunc(self.deathSaveSuccesses ?? 0))),
 		});
-	}, [dispatch, self, setSheetAc, setSheetHp, setSheetHpMax, setSheetTempHp]);
+	}, [dispatch, self, setSheetAc, setSheetHp, setSheetHpMax, setSheetTempHp, sheetMode]);
 }
